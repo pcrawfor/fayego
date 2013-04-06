@@ -57,6 +57,25 @@ func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 	}()
 }
 
+func (f *FayeServer) findClientForChannel(c chan string) *Client {
+	f.ClientMutex.Lock()
+	defer f.ClientMutex.Unlock()
+
+	for _, client := range f.Clients {
+		if client.WriteChannel == c {
+			fmt.Println("Matched Client: ", client.ClientId)
+			return &client
+		}
+	}
+	return nil
+}
+
+func (f *FayeServer) DisconnectChannel(c chan string) {
+	client := f.findClientForChannel(c)
+	fmt.Println("Disconnect Client: ", client.ClientId)
+	f.removeClientFromServer(client.ClientId)
+}
+
 // ========
 
 type FayeMessage struct {

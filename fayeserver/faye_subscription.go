@@ -50,19 +50,17 @@ func (f *FayeServer) removeSubFromClient(client Client, sub string) Client {
 }
 
 func (f *FayeServer) removeClientFromSubscription(clientId, subscription string) bool {
+	fmt.Println("Remove Client From Subscription: ", subscription)
+
 	// grab the client subscriptions array for the channel 
 	f.SubMutex.Lock()
 	defer f.SubMutex.Unlock()
 
-	fmt.Println("subscriptions: ", f.Subscriptions)
 	subs, ok := f.Subscriptions[subscription]
 
 	if !ok {
 		return false
 	}
-
-	fmt.Println("Removing sub for client: ", clientId)
-	fmt.Println("subs count before: ", len(f.Subscriptions[subscription]))
 
 	index := f.subscriptionClientIndex(subs, clientId)
 
@@ -77,7 +75,6 @@ func (f *FayeServer) removeClientFromSubscription(clientId, subscription string)
 	defer f.ClientMutex.Unlock()
 	f.Clients[clientId] = f.removeSubFromClient(f.Clients[clientId], subscription)
 
-	fmt.Println("subs count after: ", len(f.Subscriptions[subscription]))
 	return true
 }
 
@@ -98,7 +95,6 @@ func (f *FayeServer) addClientToSubscription(clientId, subscription string, c ch
 	index := f.subscriptionClientIndex(subs, clientId)
 
 	if index < 0 {
-		fmt.Println("Adding client: +%v", client)
 		f.Subscriptions[subscription] = append(subs, *client)
 		return true
 	}
@@ -119,7 +115,6 @@ func (f *FayeServer) addClientToServer(clientId, subscription string, c chan str
 	defer f.ClientMutex.Unlock()
 	client, ok := f.Clients[clientId]
 	if !ok {
-		fmt.Println("NEW CLIENT")
 		client = Client{clientId, c, []string{}}
 		f.Clients[clientId] = client
 	}
