@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	fayeserver.Start()
+	fayeserver.Start(":4001")
 }

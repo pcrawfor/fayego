@@ -137,11 +137,14 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 var f *FayeServer
 
-func Start() {
+/*
+Start the Faye server on the address/port given in the addr param
+*/
+func Start(addr string) {
 	f = NewFayeServer()
 	http.HandleFunc("/faye", serveWs)
 
-	err := http.ListenAndServe(":4001", nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		fmt.Println("Fatal error ", err.Error())
 		os.Exit(1)

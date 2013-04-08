@@ -72,8 +72,10 @@ func (f *FayeServer) findClientForChannel(c chan string) *Client {
 
 func (f *FayeServer) DisconnectChannel(c chan string) {
 	client := f.findClientForChannel(c)
-	fmt.Println("Disconnect Client: ", client.ClientId)
-	f.removeClientFromServer(client.ClientId)
+	if client != nil {
+		fmt.Println("Disconnect Client: ", client.ClientId)
+		f.removeClientFromServer(client.ClientId)
+	}
 }
 
 // ========
