@@ -70,9 +70,7 @@ func (f *FayeServer) removeClientFromSubscription(clientId, subscription string)
 		return false
 	}
 
-	// remove sub from client subs list
-	f.ClientMutex.Lock()
-	defer f.ClientMutex.Unlock()
+	// remove sub from client subs list	
 	f.Clients[clientId] = f.removeSubFromClient(f.Clients[clientId], subscription)
 
 	return true
@@ -142,6 +140,7 @@ func (f *FayeServer) removeClientFromServer(clientId string) error {
 
 	f.ClientMutex.Lock()
 	defer f.ClientMutex.Unlock()
+
 	client, ok := f.Clients[clientId]
 	if !ok {
 		return errors.New("Error removing client")

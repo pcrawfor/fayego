@@ -232,9 +232,6 @@ func (f *FayeServer) disconnect(clientId string) ([]byte, error) {
 	// tear down client connection state
 	f.removeClientFromServer(clientId)
 
-	f.ClientMutex.Lock()
-	defer f.ClientMutex.Unlock()
-
 	resp := FayeResponse{
 		Channel:    "/meta/disconnect",
 		Successful: true,
