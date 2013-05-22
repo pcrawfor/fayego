@@ -52,9 +52,7 @@ func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 			group.Done()
 		}(subs[i].WriteChannel, data)
 	}
-	go func() {
-		group.Wait()
-	}()
+	group.Wait()
 }
 
 func (f *FayeServer) findClientForChannel(c chan string) *Client {
