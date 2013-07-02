@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-/* 
+/*
 Initial constants based on websocket example code from github.com/garyburd/go-websocket
-Reader & Writer functions also implemented based on 
+Reader & Writer functions also implemented based on
 */
 const (
 	// Time allowed to write a message to the client.
@@ -33,6 +33,7 @@ type FayeHandler interface {
 type Connection struct {
 	ws   *websocket.Conn
 	send chan string
+	exit chan bool
 }
 
 /*
@@ -62,7 +63,7 @@ func (c *Connection) reader(f FayeHandler) {
 				break
 			}
 
-			fmt.Println("Read message: " + string(message))
+			//fmt.Println("Read message: " + string(message))
 			f.HandleMessage(message)
 
 		}
@@ -90,6 +91,7 @@ func (c *Connection) writer() {
 	for {
 		select {
 		case message, ok := <-c.send:
+			//fmt.Println("writing: ", message)
 			if !ok {
 				c.write(websocket.OpClose, []byte{})
 				return
@@ -101,7 +103,10 @@ func (c *Connection) writer() {
 			if err := c.write(websocket.OpPing, []byte{}); err != nil {
 				return
 			}
+		case <-c.exit:
+			fmt.Println("exiting writer...")
+			return
 		}
+
 	}
-	fmt.Println("Writer exit.")
 }
