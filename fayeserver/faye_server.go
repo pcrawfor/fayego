@@ -12,6 +12,12 @@ import (
 	"sync"
 )
 
+const CHANNEL_HANDSHAKE = "/meta/handshake"
+const CHANNEL_CONNECT = "/meta/connect"
+const CHANNEL_DISCONNECT = "/meta/disconnect"
+const CHANNEL_SUBSCRIBE = "/meta/subscribe"
+const CHANNEL_UNSUBSCRIBE = "/meta/unsubscribe"
+
 type FayeServer struct {
 	Connections   []Connection
 	Subscriptions map[string][]Client
@@ -98,19 +104,19 @@ func (f *FayeServer) HandleMessage(message []byte, c chan string) ([]byte, error
 	}
 
 	switch fm.Channel {
-	case "/meta/handshake":
+	case CHANNEL_HANDSHAKE:
 		fmt.Println("handshake")
 		return f.handshake()
-	case "/meta/connect":
+	case CHANNEL_CONNECT:
 		fmt.Println("connect")
 		return f.connect(fm.ClientId)
-	case "/meta/disconnect":
+	case CHANNEL_DISCONNECT:
 		fmt.Println("disconnect")
 		return f.disconnect(fm.ClientId)
-	case "/meta/subscribe":
+	case CHANNEL_SUBSCRIBE:
 		fmt.Println("subscribe")
 		return f.subscribe(fm.ClientId, fm.Subscription, c)
-	case "/meta/unsubscribe":
+	case CHANNEL_UNSUBSCRIBE:
 		fmt.Println("subscribe")
 		return f.unsubscribe(fm.ClientId, fm.Subscription)
 	default:
@@ -127,16 +133,17 @@ FayeResponse
 */
 
 type FayeResponse struct {
-	Channel                  string            `json:"channel,omitempty"`
-	Successful               bool              `json:"successful,omitempty"`
-	Version                  string            `json:"version,omitempty"`
-	SupportedConnectionTypes []string          `json:"supportedConnectionTypes,omitempty"`
-	ClientId                 string            `json:"clientId,omitempty"`
-	Advice                   map[string]string `json:"advice,omitempty"`
-	Subscription             string            `json:"subscription,omitempty"`
-	Error                    string            `json:"error,omitempty"`
-	Id                       string            `json:"id,omitempty"`
-	Data                     interface{}       `json:"data,omitempty"`
+	Channel                  string                 `json:"channel,omitempty"`
+	Successful               bool                   `json:"successful,omitempty"`
+	Version                  string                 `json:"version,omitempty"`
+	SupportedConnectionTypes []string               `json:"supportedConnectionTypes,omitempty"`
+	ConnectionType           string                 `json:"connectionType,omitempty"`
+	ClientId                 string                 `json:"clientId,omitempty"`
+	Advice                   map[string]interface{} `json:"advice,omitempty"`
+	Subscription             string                 `json:"subscription,omitempty"`
+	Error                    string                 `json:"error,omitempty"`
+	Id                       string                 `json:"id,omitempty"`
+	Data                     interface{}            `json:"data,omitempty"`
 }
 
 /*
@@ -176,7 +183,7 @@ func (f *FayeServer) handshake() ([]byte, error) {
 		Version:                  "1.0",
 		SupportedConnectionTypes: []string{"websocket"},
 		ClientId:                 generateClientId(),
-		Advice:                   map[string]string{"reconnect": "retry"},
+		Advice:                   map[string]interface{}{"reconnect": "retry"},
 	}
 
 	// wrap it in an array & convert to json
@@ -208,7 +215,7 @@ func (f *FayeServer) connect(clientId string) ([]byte, error) {
 		Successful: true,
 		Error:      "",
 		ClientId:   clientId,
-		Advice:     map[string]string{"reconnect": "retry"},
+		Advice:     map[string]interface{}{"reconnect": "retry"},
 	}
 
 	// wrap it in an array & convert to json
@@ -259,7 +266,7 @@ Example response
 
 func (f *FayeServer) subscribe(clientId, subscription string, c chan string) ([]byte, error) {
 
-	// subscribe the client to the given channel	
+	// subscribe the client to the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
@@ -297,7 +304,7 @@ Example response
 */
 
 func (f *FayeServer) unsubscribe(clientId, subscription string) ([]byte, error) {
-	// TODO: unsubscribe the client from the given channel	
+	// TODO: unsubscribe the client from the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
