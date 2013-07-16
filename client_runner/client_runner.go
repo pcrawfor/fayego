@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func main() {
@@ -44,22 +43,7 @@ func main() {
 	fmt.Print("Ready.\n> ")
 	go read(client)
 
-	go func() {
-		for {
-			select {
-			case message, ok := <-client.MessageChan:
-				if !ok {
-					fmt.Println("error on message.")
-				}
-				fmt.Print("\nchannel " + message.Channel + ": " + message.Data["message"].(string) + "\n> ")
-			}
-		}
-	}()
-
-	go func() {
-		time.Sleep(time.Second * 2)
-		client.Publish("/foobar", "oh i'm here alright.")
-	}()
+	go recvMessages(client)
 
 	// handle interrupts
 	hupChan := make(chan os.Signal, 1)
@@ -75,6 +59,21 @@ func main() {
 		case <-hupChan:
 			fmt.Println("HUP Signal")
 			quit(client)
+		}
+	}
+}
+
+/*
+Listen for messages from the client's message channel and print them to stdout
+*/
+func recvMessages(client *fayeclient.FayeClient) {
+	for {
+		select {
+		case message, ok := <-client.MessageChan:
+			if !ok {
+				fmt.Println("error on message.")
+			}
+			fmt.Print("\nchannel " + message.Channel + ": " + message.Data["message"].(string) + "\n> ")
 		}
 	}
 }

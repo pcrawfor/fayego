@@ -41,14 +41,12 @@ type ClientSubscription struct {
 
 func (f *FayeClient) addSubscription(channel string) {
 	c := ClientSubscription{channel: channel, connected: false}
-	fmt.Println("Add sub: ", channel)
 	f.subscriptions = append(f.subscriptions, &c)
 }
 
 func (f *FayeClient) removeSubscription(channel string) {
 	for i, sub := range f.subscriptions {
 		if channel == sub.channel {
-			fmt.Println("Remove sub: ", channel)
 			f.subscriptions = append(f.subscriptions[:i], f.subscriptions[i+1:]...)
 		}
 	}
@@ -176,8 +174,6 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 
 	switch fm.Channel {
 	case fayeserver.CHANNEL_HANDSHAKE:
-		//fmt.Println("Recv'd handshake response")
-		//fmt.Println("connect client id: ", fm.ClientId)
 		f.clientId = fm.ClientId
 		f.connect() // send faye connect message
 		f.fayeState = StateFayeConnected
@@ -187,32 +183,24 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 		//fmt.Println("Recv'd connect response")
 
 	case fayeserver.CHANNEL_DISCONNECT:
-		//fmt.Println("Recv'd disconnect response")
 		f.fayeState = StateFayeDisconnected
 		f.disconnectFromServer()
 
 	case fayeserver.CHANNEL_SUBSCRIBE:
-		fmt.Println("Recv'd subscribe response")
-		// TODO: store the subscription state if successful
 		f.updateSubscription(fm.Subscription, fm.Successful)
 
 	case fayeserver.CHANNEL_UNSUBSCRIBE:
-		fmt.Println("Recv'd unsubscribe response")
-		// TODO: clear the subscription state if successful
 		if fm.Successful {
 			f.removeSubscription(fm.Subscription)
 		}
 	default:
-		//fmt.Println("Recv'd message on channel: ", fm.Channel)
-		//fmt.Println("data is: ", fm.Data)
 		if fm.Data != nil {
 			if fm.ClientId == f.clientId {
 				return nil
 			}
 			data := fm.Data.(map[string]interface{})
 			m := data["message"].(string)
-			// tell the client we got a message on a channel.
-			// sends a string of the form "channel:message"
+			// tell the client we got a message on a channel
 			go func(msg string) {
 				f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: data}
 			}(m)
