@@ -64,15 +64,15 @@ func main() {
 		select {
 		case <-termChan:
 			fmt.Println("INT Signal")
-			quit()
+			quit(client)
 		case <-hupChan:
 			fmt.Println("HUP Signal")
-			quit()
+			quit(client)
 		}
 	}
 }
 
-func quit() {
+func quit(client *fayeclient.FayeClient) {
 	client.Unsubscribe("/testing")
 	client.Disconnect()
 	os.Exit(0)
