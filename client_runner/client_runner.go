@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 
 	// subscribe to a channel
 	client.Subscribe("/testing")
+	client.Subscribe("/foobar")
 
 	// read from stdin
 	fmt.Print("Ready.\n> ")
@@ -49,9 +51,14 @@ func main() {
 				if !ok {
 					fmt.Println("error on message.")
 				}
-				fmt.Print("\nmessage: " + message + "\n> ")
+				fmt.Print("\nchannel " + message.Channel + ": " + message.Data["message"].(string) + "\n> ")
 			}
 		}
+	}()
+
+	go func() {
+		time.Sleep(time.Second * 2)
+		client.Publish("/foobar", "oh i'm here alright.")
 	}()
 
 	// handle interrupts
