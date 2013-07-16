@@ -1,5 +1,14 @@
 package fayeclient
 
+/*
+
+TODO:
+
+* handle extensions
+* implement other protocol comm functions
+
+*/
+
 import (
 	"encoding/json"
 	"errors"
@@ -20,14 +29,60 @@ const ( // iota is reset to 0
 	StateFayeConnected    = iota
 )
 
+// ==========================================
+/*
+A subscription represents a subscription to a channel by the client
+Each sub has a path representing the channel on faye, a messageChan which is recieve any messages sent to it and a connected indicator to indicate the state of the sub on the faye server
+*/
+type ClientSubscription struct {
+	channel   string
+	connected bool
+}
+
+func (f *FayeClient) addSubscription(channel string) {
+	c := ClientSubscription{channel: channel, connected: false}
+	fmt.Println("Add sub: ", channel)
+	f.subscriptions = append(f.subscriptions, &c)
+}
+
+func (f *FayeClient) removeSubscription(channel string) {
+	for i, sub := range f.subscriptions {
+		if channel == sub.channel {
+			fmt.Println("Remove sub: ", channel)
+			f.subscriptions = append(f.subscriptions[:i], f.subscriptions[i+1:]...)
+		}
+	}
+}
+
+func (f *FayeClient) updateSubscription(channel string, connected bool) {
+	s := f.getSubscription(channel)
+	s.connected = connected
+}
+
+func (f *FayeClient) getSubscription(channel string) *ClientSubscription {
+	for i, sub := range f.subscriptions {
+		if channel == sub.channel {
+			return f.subscriptions[i]
+		}
+	}
+	return nil
+}
+
+// ==========================================
 type FayeClient struct {
 	Host          string
-	MessageChan   chan string // any messages recv'd by the client will be sent to the message channel - TODO: remap this to a set of subscription message channels one per active subscription
+	MessageChan   chan ClientMessage // any messages recv'd by the client will be sent to the message channel - TODO: remap this to a set of subscription message channels one per active subscription
 	conn          *Connection
 	fayeState     int
 	readyChan     chan bool
 	clientId      string
 	messageNumber int
+	subscriptions []*ClientSubscription
+}
+
+type ClientMessage struct {
+	Channel string
+	Data    map[string]interface{}
 }
 
 func NewFayeClient(host string) *FayeClient {
@@ -35,7 +90,7 @@ func NewFayeClient(host string) *FayeClient {
 		host = DEFAULT_HOST
 	}
 	// instantiate a FayeClient and return
-	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan string, 100), messageNumber: 0}
+	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan ClientMessage, 100), messageNumber: 0}
 }
 
 func (f *FayeClient) Start(ready chan bool) error {
@@ -51,6 +106,9 @@ func (f *FayeClient) Start(ready chan bool) error {
 	return nil
 }
 
+/*
+Open the websocket connection to the faye server and initialize the client state
+*/
 func (f *FayeClient) connectToServer() error {
 	fmt.Println("start client")
 
@@ -60,7 +118,6 @@ func (f *FayeClient) connectToServer() error {
 	if err != nil {
 		fmt.Println("Error connecting to server: ", err)
 		os.Exit(0)
-		//panic("Dial: %v", err)
 	}
 
 	ws, resp, err := websocket.NewClient(c, url, nil, 1024, 1024)
@@ -83,12 +140,18 @@ func (f *FayeClient) connectToServer() error {
 	return nil
 }
 
+/*
+Close the websocket connection and set the faye client state
+*/
 func (f *FayeClient) disconnectFromServer() {
 	f.conn.exit <- true
 	f.fayeState = StateWSDisconnected
 	f.conn.ws.Close()
 }
 
+/*
+Write a message to the faye server over the websocket connection
+*/
 func (f *FayeClient) Write(msg string) error {
 	//fmt.Println("Send msg: ", msg)
 	f.conn.send <- msg
@@ -99,8 +162,6 @@ func (f *FayeClient) Write(msg string) error {
 Parse and interpret a faye message response
 */
 func (f *FayeClient) HandleMessage(message []byte) error {
-	//fmt.Println("Handle message: ", string(message))
-
 	// parse the faye message and interpret the logic to set client state appropriately
 	resp := []fayeserver.FayeResponse{}
 	err := json.Unmarshal(message, &resp)
@@ -113,8 +174,6 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 		fmt.Println("Error parsing json. ", err)
 	}
 
-	//fmt.Println("parsed: ", resp[0].Channel)
-
 	switch fm.Channel {
 	case fayeserver.CHANNEL_HANDSHAKE:
 		//fmt.Println("Recv'd handshake response")
@@ -126,18 +185,23 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 
 	case fayeserver.CHANNEL_CONNECT:
 		//fmt.Println("Recv'd connect response")
+
 	case fayeserver.CHANNEL_DISCONNECT:
 		//fmt.Println("Recv'd disconnect response")
 		f.fayeState = StateFayeDisconnected
 		f.disconnectFromServer()
 
 	case fayeserver.CHANNEL_SUBSCRIBE:
-		//fmt.Println("Recv'd subscribe response")
+		fmt.Println("Recv'd subscribe response")
 		// TODO: store the subscription state if successful
+		f.updateSubscription(fm.Subscription, fm.Successful)
 
 	case fayeserver.CHANNEL_UNSUBSCRIBE:
-		//fmt.Println("Recv'd unsubscribe response")
+		fmt.Println("Recv'd unsubscribe response")
 		// TODO: clear the subscription state if successful
+		if fm.Successful {
+			f.removeSubscription(fm.Subscription)
+		}
 	default:
 		//fmt.Println("Recv'd message on channel: ", fm.Channel)
 		//fmt.Println("data is: ", fm.Data)
@@ -148,9 +212,9 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 			data := fm.Data.(map[string]interface{})
 			m := data["message"].(string)
 			// tell the client we got a message on a channel.
-			// TODO: do this via the subscription management and state
+			// sends a string of the form "channel:message"
 			go func(msg string) {
-				f.MessageChan <- msg
+				f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: data}
 			}(m)
 		}
 	}
@@ -163,6 +227,7 @@ func (f *FayeClient) Subscribe(channel string) error {
 		return errors.New("Channel must have a value.")
 	}
 	//fmt.Println("Subscribe to channel: ", channel)
+	f.addSubscription(channel)
 	return f.subscribe(channel)
 }
 
@@ -300,13 +365,3 @@ func (f *FayeClient) writeMessage(message fayeserver.FayeResponse) error {
 func (f *FayeClient) messageId() string {
 	return "1"
 }
-
-/*
-
-TODO:
-
-* handle connection state for FayeClient
-* implement other protocol comm functions
-* implement publish and subscribe semantics
-
-*/
