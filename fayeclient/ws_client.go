@@ -31,9 +31,21 @@ type FayeHandler interface {
 }
 
 type Connection struct {
-	ws   *websocket.Conn
-	send chan string
-	exit chan bool
+	ws              *websocket.Conn
+	readerConnected bool
+	writerConnected bool
+	send            chan string
+	exit            chan bool
+}
+
+func (c *Connection) Connected() bool {
+	if c.readerConnected && c.writerConnected {
+		fmt.Println("CONNECTED")
+	} else {
+		fmt.Println("NOT CONNECTED")
+	}
+
+	return c.readerConnected && c.writerConnected
 }
 
 /*
@@ -43,9 +55,11 @@ Read messages from the websocket connection
 */
 func (c *Connection) reader(f FayeHandler) {
 	fmt.Println("reading...")
+	c.readerConnected = true
 	defer func() {
 		fmt.Println("reader disconnect")
 		c.ws.Close()
+		c.readerConnected = false
 	}()
 	c.ws.SetReadLimit(maxMessageSize)
 	c.ws.SetReadDeadline(time.Now().Add(readWait))
@@ -84,9 +98,11 @@ func (c *Connection) write(opCode int, payload []byte) error {
 func (c *Connection) writer() {
 	fmt.Println("Writer started.")
 	ticker := time.NewTicker(pingPeriod)
+	c.writerConnected = true
 	defer func() {
 		ticker.Stop()
 		c.ws.Close()
+		c.writerConnected = false
 	}()
 	for {
 		select {

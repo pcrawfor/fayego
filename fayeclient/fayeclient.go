@@ -228,9 +228,7 @@ func (f *FayeClient) Unsubscribe(channel string) error {
 }
 
 func (f *FayeClient) Publish(channel, message string) error {
-	// TODO: tell faye to publish a message on a channel.
-	f.publish(channel, message)
-	return nil
+	return f.publish(channel, message)
 }
 
 func (f *FayeClient) Disconnect() {
@@ -341,6 +339,18 @@ func (f *FayeClient) publish(channel, msg string) error {
 Encode the json and send the message over the wire.
 */
 func (f *FayeClient) writeMessage(message fayeserver.FayeResponse) error {
+	if !f.conn.Connected() {
+		// reconnect
+		cerr := f.connectToServer()
+		if cerr != nil {
+			return cerr
+		}
+		if !f.conn.Connected() {
+			errors.New("Not Connected, Reconnect Failed.")
+		}
+
+	}
+
 	json, err := json.Marshal(message)
 	if err != nil {
 		return err
