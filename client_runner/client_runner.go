@@ -22,7 +22,7 @@ import (
 func main() {
 	fmt.Println("Faye Client Runner start")
 
-	client := fayeclient.NewFayeClient("localhost:5222/faye")
+	client := fayeclient.NewFayeClient("localhost:8000/faye")
 
 	ready := make(chan bool)
 	err := client.Start(ready)
@@ -90,7 +90,7 @@ func read(client *fayeclient.FayeClient) {
 	for s.Scan() {
 		m := s.Text()
 		fmt.Print("me: " + m + "\n> ")
-		client.Publish("/testing", m)
+		client.Publish("/testing", fayeclient.MessageData{"message": m})
 	}
 
 	if err := s.Err(); err != nil {

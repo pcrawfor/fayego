@@ -29,6 +29,8 @@ const ( // iota is reset to 0
 	StateFayeConnected    = iota
 )
 
+type MessageData map[string]interface{}
+
 // ==========================================
 /*
 A subscription represents a subscription to a channel by the client
@@ -227,8 +229,8 @@ func (f *FayeClient) Unsubscribe(channel string) error {
 	return f.unsubscribe(channel)
 }
 
-func (f *FayeClient) Publish(channel, message string) error {
-	return f.publish(channel, message)
+func (f *FayeClient) Publish(channel string, data MessageData) error {
+	return f.publish(channel, data)
 }
 
 func (f *FayeClient) Disconnect() {
@@ -321,8 +323,7 @@ func (f *FayeClient) unsubscribe(channel string) error {
 /*
   Publish a message to a channel.
 */
-func (f *FayeClient) publish(channel, msg string) error {
-	data := map[string]interface{}{"message": msg}
+func (f *FayeClient) publish(channel string, data MessageData) error {
 	message := fayeserver.FayeResponse{Channel: channel, ClientId: f.clientId, Id: f.messageId(), Data: data}
 	//fmt.Println("publish message: ", message)
 	err := f.writeMessage(message)

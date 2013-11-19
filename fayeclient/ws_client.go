@@ -39,12 +39,6 @@ type Connection struct {
 }
 
 func (c *Connection) Connected() bool {
-	if c.readerConnected && c.writerConnected {
-		fmt.Println("CONNECTED")
-	} else {
-		fmt.Println("NOT CONNECTED")
-	}
-
 	return c.readerConnected && c.writerConnected
 }
 
