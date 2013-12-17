@@ -17,10 +17,11 @@ import (
 	"github.com/pcrawfor/fayego/fayeserver"
 	"net"
 	"net/url"
-	"os"
+	"time"
 )
 
 const DEFAULT_HOST = "localhost:4001/faye"
+const RECONNECT_ATTEMPTS = 60
 
 const ( // iota is reset to 0
 	StateWSDisconnected   = iota // == 0
@@ -66,6 +67,13 @@ func (f *FayeClient) getSubscription(channel string) *ClientSubscription {
 		}
 	}
 	return nil
+}
+
+func (f *FayeClient) resubscribeSubscriptions() {
+	for _, sub := range f.subscriptions {
+		fmt.Println("resubscribe: ", sub.channel)
+		f.subscribe(sub.channel)
+	}
 }
 
 // ==========================================
@@ -117,7 +125,7 @@ func (f *FayeClient) connectToServer() error {
 
 	if err != nil {
 		fmt.Println("Error connecting to server: ", err)
-		os.Exit(0)
+		return err
 	}
 
 	ws, resp, err := websocket.NewClient(c, url, nil, 1024, 1024)
@@ -144,8 +152,8 @@ func (f *FayeClient) connectToServer() error {
 Close the websocket connection and set the faye client state
 */
 func (f *FayeClient) disconnectFromServer() {
-	f.conn.exit <- true
 	f.fayeState = StateWSDisconnected
+	f.conn.exit <- true
 	f.conn.ws.Close()
 }
 
@@ -153,9 +161,48 @@ func (f *FayeClient) disconnectFromServer() {
 Write a message to the faye server over the websocket connection
 */
 func (f *FayeClient) Write(msg string) error {
-	//fmt.Println("Send msg: ", msg)
 	f.conn.send <- msg
 	return nil
+}
+
+/*
+ReaderDisconnect - called by the connection handler if the reader connection is dropped by the loss of a server connection
+*/
+func (f *FayeClient) ReaderDisconnect() {
+	if StateWSDisconnected != f.fayeState {
+		fmt.Println("Server went away try to reconnect")
+		f.conn.ws.Close()
+		//f.fayeState = StateWSDisconnected
+		f.reconnectWithWalkOff()
+	}
+}
+
+/*
+reconnectWithWalkOff - tries to reconnect with timed walkoff, stop if we reconnect or the walkoff completes
+		 	TODO: consider best way to handle if the server is never available for reconnect.
+*/
+func (f *FayeClient) reconnectWithWalkOff() {
+	interval := 1 * time.Second
+	var actualInterval time.Duration
+	for i := 0; i < RECONNECT_ATTEMPTS; i++ {
+		if !f.conn.Connected() {
+			actualInterval = time.Duration(i+1) * interval
+			fmt.Println("Actual interval: ", actualInterval)
+			time.Sleep(actualInterval)
+			serr := f.Start(f.readyChan)
+			if serr != nil {
+				fmt.Println("Error reconnecting: ", serr)
+			} else {
+				<-f.readyChan
+				f.resubscribeSubscriptions()
+				break
+			}
+		}
+
+		time.Sleep(actualInterval)
+	}
+
+	fmt.Println("reconnected")
 }
 
 /*

@@ -16,7 +16,7 @@ const (
 	writeWait = 10 * time.Second
 
 	// Time allowed to read the next message from the client.
-	readWait = 60 * time.Second
+	readWait = 180 * time.Second
 
 	// Send pings to client with this period. Must be less than readWait.
 	pingPeriod = (readWait * 9) / 10
@@ -28,6 +28,7 @@ const (
 // interface responsible for parsing faye messages
 type FayeHandler interface {
 	HandleMessage(message []byte) error
+	ReaderDisconnect()
 }
 
 type Connection struct {
@@ -54,6 +55,7 @@ func (c *Connection) reader(f FayeHandler) {
 		fmt.Println("reader disconnect")
 		c.ws.Close()
 		c.readerConnected = false
+		f.ReaderDisconnect()
 	}()
 	c.ws.SetReadLimit(maxMessageSize)
 	c.ws.SetReadDeadline(time.Now().Add(readWait))
