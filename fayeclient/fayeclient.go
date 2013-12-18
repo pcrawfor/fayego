@@ -13,11 +13,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/garyburd/go-websocket/websocket"
+	"github.com/gorilla/websocket"
 	"github.com/pcrawfor/fayego/fayeserver"
 	"net"
 	"net/url"
-	"time"
 )
 
 const DEFAULT_HOST = "localhost:4001/faye"
@@ -91,6 +90,7 @@ type FayeClient struct {
 type ClientMessage struct {
 	Channel string
 	Data    map[string]interface{}
+	Ext     map[string]interface{}
 }
 
 func NewFayeClient(host string) *FayeClient {
@@ -140,7 +140,7 @@ func (f *FayeClient) connectToServer() error {
 		fmt.Println("Resp: ", resp)
 	}
 
-	conn := &Connection{send: make(chan string, 256), ws: ws, exit: make(chan bool)}
+	conn := &Connection{send: make(chan []byte, 256), ws: ws, exit: make(chan bool)}
 	f.conn = conn
 	go conn.writer()
 	go conn.reader(f)
@@ -161,48 +161,8 @@ func (f *FayeClient) disconnectFromServer() {
 Write a message to the faye server over the websocket connection
 */
 func (f *FayeClient) Write(msg string) error {
-	f.conn.send <- msg
+	f.conn.send <- []byte(msg)
 	return nil
-}
-
-/*
-ReaderDisconnect - called by the connection handler if the reader connection is dropped by the loss of a server connection
-*/
-func (f *FayeClient) ReaderDisconnect() {
-	if StateWSDisconnected != f.fayeState {
-		fmt.Println("Server went away try to reconnect")
-		f.conn.ws.Close()
-		//f.fayeState = StateWSDisconnected
-		f.reconnectWithWalkOff()
-	}
-}
-
-/*
-reconnectWithWalkOff - tries to reconnect with timed walkoff, stop if we reconnect or the walkoff completes
-		 	TODO: consider best way to handle if the server is never available for reconnect.
-*/
-func (f *FayeClient) reconnectWithWalkOff() {
-	interval := 1 * time.Second
-	var actualInterval time.Duration
-	for i := 0; i < RECONNECT_ATTEMPTS; i++ {
-		if !f.conn.Connected() {
-			actualInterval = time.Duration(i+1) * interval
-			fmt.Println("Actual interval: ", actualInterval)
-			time.Sleep(actualInterval)
-			serr := f.Start(f.readyChan)
-			if serr != nil {
-				fmt.Println("Error reconnecting: ", serr)
-			} else {
-				<-f.readyChan
-				f.resubscribeSubscriptions()
-				break
-			}
-		}
-
-		time.Sleep(actualInterval)
-	}
-
-	fmt.Println("reconnected")
 }
 
 /*
@@ -247,12 +207,21 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 			if fm.ClientId == f.clientId {
 				return nil
 			}
-			data := fm.Data.(map[string]interface{})
-			m := data["message"].(string)
+			var data map[string]interface{}
+			var ext map[string]interface{}
+
+			if fm.Data != nil {
+				data = fm.Data.(map[string]interface{})
+			}
+
+			if fm.Ext != nil {
+				ext = fm.Ext.(map[string]interface{})
+			}
+
 			// tell the client we got a message on a channel
-			go func(msg string) {
-				f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: data}
-			}(m)
+			go func(d, e map[string]interface{}) {
+				f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: d, Ext: e}
+			}(data, ext)
 		}
 	}
 
