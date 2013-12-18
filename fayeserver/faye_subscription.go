@@ -14,7 +14,7 @@ and a list of subscriptions(faye channels) that have been subscribed to by the c
 */
 type Client struct {
 	ClientId     string
-	WriteChannel chan string
+	WriteChannel chan []byte
 	ClientSubs   []string
 }
 
@@ -52,7 +52,7 @@ func (f *FayeServer) removeSubFromClient(client Client, sub string) Client {
 func (f *FayeServer) removeClientFromSubscription(clientId, subscription string) bool {
 	fmt.Println("Remove Client From Subscription: ", subscription)
 
-	// grab the client subscriptions array for the channel 
+	// grab the client subscriptions array for the channel
 	f.SubMutex.Lock()
 	defer f.SubMutex.Unlock()
 
@@ -70,13 +70,13 @@ func (f *FayeServer) removeClientFromSubscription(clientId, subscription string)
 		return false
 	}
 
-	// remove sub from client subs list	
+	// remove sub from client subs list
 	f.Clients[clientId] = f.removeSubFromClient(f.Clients[clientId], subscription)
 
 	return true
 }
 
-func (f *FayeServer) addClientToSubscription(clientId, subscription string, c chan string) bool {
+func (f *FayeServer) addClientToSubscription(clientId, subscription string, c chan []byte) bool {
 	fmt.Println("Add Client to Subscription: ", subscription)
 
 	// Add client to server list if it is not present
@@ -106,7 +106,7 @@ func (f *FayeServer) addClientToSubscription(clientId, subscription string, c ch
 /*
 Add Client to server only if the client is not already present
 */
-func (f *FayeServer) addClientToServer(clientId, subscription string, c chan string) *Client {
+func (f *FayeServer) addClientToServer(clientId, subscription string, c chan []byte) *Client {
 	fmt.Println("Add client: ", clientId)
 
 	f.ClientMutex.Lock()

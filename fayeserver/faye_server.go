@@ -53,15 +53,15 @@ func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 	var group sync.WaitGroup
 	for i := range subs {
 		group.Add(1)
-		go func(client chan<- string, data string) {
-			client <- data
+		go func(client chan<- []byte, data string) {
+			client <- []byte(data)
 			group.Done()
 		}(subs[i].WriteChannel, data)
 	}
 	group.Wait()
 }
 
-func (f *FayeServer) findClientForChannel(c chan string) *Client {
+func (f *FayeServer) findClientForChannel(c chan []byte) *Client {
 	f.ClientMutex.Lock()
 	defer f.ClientMutex.Unlock()
 
@@ -74,7 +74,7 @@ func (f *FayeServer) findClientForChannel(c chan string) *Client {
 	return nil
 }
 
-func (f *FayeServer) DisconnectChannel(c chan string) {
+func (f *FayeServer) DisconnectChannel(c chan []byte) {
 	client := f.findClientForChannel(c)
 	if client != nil {
 		fmt.Println("Disconnect Client: ", client.ClientId)
@@ -94,7 +94,7 @@ type FayeMessage struct {
 
 // Message handling
 
-func (f *FayeServer) HandleMessage(message []byte, c chan string) ([]byte, error) {
+func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
 	// parse message JSON
 	fm := FayeMessage{}
 	err := json.Unmarshal(message, &fm)
@@ -144,6 +144,7 @@ type FayeResponse struct {
 	Error                    string                 `json:"error,omitempty"`
 	Id                       string                 `json:"id,omitempty"`
 	Data                     interface{}            `json:"data,omitempty"`
+	Ext                      interface{}            `json:"ext,omitempty"`
 }
 
 /*
@@ -264,7 +265,7 @@ Example response
 ]
 */
 
-func (f *FayeServer) subscribe(clientId, subscription string, c chan string) ([]byte, error) {
+func (f *FayeServer) subscribe(clientId, subscription string, c chan []byte) ([]byte, error) {
 
 	// subscribe the client to the given channel
 	if len(subscription) == 0 {
