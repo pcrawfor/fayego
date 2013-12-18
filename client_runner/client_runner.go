@@ -73,7 +73,8 @@ func recvMessages(client *fayeclient.FayeClient) {
 			if !ok {
 				fmt.Println("error on message.")
 			}
-			fmt.Print("\nchannel " + message.Channel + ": " + message.Data["message"].(string) + "\n> ")
+			fmt.Println("\nchannel ", message.Channel)
+			fmt.Println("message: ", message.Data)
 		}
 	}
 }
