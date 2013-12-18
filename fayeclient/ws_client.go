@@ -26,6 +26,7 @@ const (
 // interface responsible for parsing faye messages
 type FayeHandler interface {
 	HandleMessage(message []byte) error
+	ReaderDisconnect()
 }
 
 type Connection struct {
@@ -34,6 +35,10 @@ type Connection struct {
 	writerConnected bool
 	send            chan []byte
 	exit            chan bool
+}
+
+func NewConnection(ws *websocket.Conn) *Connection {
+	return &Connection{send: make(chan []byte, 256), ws: ws, exit: make(chan bool)}
 }
 
 func (c *Connection) Connected() bool {
@@ -47,15 +52,18 @@ Read messages from the websocket connection
 */
 func (c *Connection) reader(f FayeHandler) {
 	fmt.Println("reading...")
+	c.readerConnected = true
+
 	defer func() {
 		fmt.Println("reader disconnect")
 		c.ws.Close()
 		c.readerConnected = false
+		f.ReaderDisconnect()
 	}()
 	c.ws.SetReadLimit(maxMessageSize)
 	c.ws.SetReadDeadline(time.Now().Add(pongWait))
 	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-	c.readerConnected = true
+
 	for {
 		_, message, err := c.ws.ReadMessage()
 		if err != nil {
@@ -80,13 +88,15 @@ func (c *Connection) write(mt int, payload []byte) error {
 
 func (c *Connection) writer() {
 	fmt.Println("Writer started.")
+	c.writerConnected = true
+
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.ws.Close()
 		c.writerConnected = false
 	}()
-	c.writerConnected = true
+
 	for {
 		select {
 		case message, ok := <-c.send:

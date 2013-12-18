@@ -17,10 +17,11 @@ import (
 	"github.com/pcrawfor/fayego/fayeserver"
 	"net"
 	"net/url"
+	"time"
 )
 
 const DEFAULT_HOST = "localhost:4001/faye"
-const RECONNECT_ATTEMPTS = 60
+const DEFAULT_KEEP_ALIVE_SECS = 30
 
 const ( // iota is reset to 0
 	StateWSDisconnected   = iota // == 0
@@ -28,8 +29,6 @@ const ( // iota is reset to 0
 	StateFayeDisconnected = iota
 	StateFayeConnected    = iota
 )
-
-type MessageData map[string]interface{}
 
 // ==========================================
 /*
@@ -85,6 +84,7 @@ type FayeClient struct {
 	clientId      string
 	messageNumber int
 	subscriptions []*ClientSubscription
+	keepAliveSecs int
 }
 
 type ClientMessage struct {
@@ -98,7 +98,11 @@ func NewFayeClient(host string) *FayeClient {
 		host = DEFAULT_HOST
 	}
 	// instantiate a FayeClient and return
-	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan ClientMessage, 100), messageNumber: 0}
+	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan ClientMessage, 100), messageNumber: 0, keepAliveSecs: DEFAULT_KEEP_ALIVE_SECS}
+}
+
+func (f *FayeClient) SetKeepAliveIntervalSeconds(secs int) {
+	f.keepAliveSecs = secs
 }
 
 func (f *FayeClient) Start(ready chan bool) error {
@@ -140,12 +144,26 @@ func (f *FayeClient) connectToServer() error {
 		fmt.Println("Resp: ", resp)
 	}
 
-	conn := &Connection{send: make(chan []byte, 256), ws: ws, exit: make(chan bool)}
+	conn := NewConnection(ws)
 	f.conn = conn
+	f.conn.writerConnected = true
+	f.conn.readerConnected = true
 	go conn.writer()
 	go conn.reader(f)
-
+	go f.keepAlive()
 	return nil
+}
+
+func (f *FayeClient) keepAlive() {
+	c := time.Tick(time.Duration(f.keepAliveSecs) * time.Second)
+	for {
+		select {
+		case <-c:
+			fmt.Println("Send keep-alive: ", time.Now())
+			f.connect()
+		}
+
+	}
 }
 
 /*
@@ -155,6 +173,13 @@ func (f *FayeClient) disconnectFromServer() {
 	f.fayeState = StateWSDisconnected
 	f.conn.exit <- true
 	f.conn.ws.Close()
+}
+
+/*
+ReaderDisconnect - called by the connection handler if the reader connection is dropped by the loss of a server connection
+*/
+func (f *FayeClient) ReaderDisconnect() {
+	f.readyChan <- false
 }
 
 /*
@@ -245,7 +270,7 @@ func (f *FayeClient) Unsubscribe(channel string) error {
 	return f.unsubscribe(channel)
 }
 
-func (f *FayeClient) Publish(channel string, data MessageData) error {
+func (f *FayeClient) Publish(channel string, data map[string]interface{}) error {
 	return f.publish(channel, data)
 }
 
@@ -339,7 +364,7 @@ func (f *FayeClient) unsubscribe(channel string) error {
 /*
   Publish a message to a channel.
 */
-func (f *FayeClient) publish(channel string, data MessageData) error {
+func (f *FayeClient) publish(channel string, data map[string]interface{}) error {
 	message := fayeserver.FayeResponse{Channel: channel, ClientId: f.clientId, Id: f.messageId(), Data: data}
 	//fmt.Println("publish message: ", message)
 	err := f.writeMessage(message)

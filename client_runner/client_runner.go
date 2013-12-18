@@ -91,7 +91,7 @@ func read(client *fayeclient.FayeClient) {
 	for s.Scan() {
 		m := s.Text()
 		fmt.Print("me: " + m + "\n> ")
-		client.Publish("/testing", fayeclient.MessageData{"message": m})
+		client.Publish("/testing", map[string]interface{}{"message": m})
 	}
 
 	if err := s.Err(); err != nil {
