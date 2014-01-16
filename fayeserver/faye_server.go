@@ -24,6 +24,7 @@ type FayeServer struct {
 	SubMutex      sync.RWMutex
 	Clients       map[string]Client
 	ClientMutex   sync.RWMutex
+	idCount       int
 }
 
 /*
@@ -41,6 +42,7 @@ func NewFayeServer() *FayeServer {
 */
 func (f *FayeServer) publishToChannel(channel, data string) {
 	subs, ok := f.Subscriptions[channel]
+	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[channel]))
 	if ok {
 		f.multiplexWrite(subs, data)
 	}
@@ -52,9 +54,15 @@ func (f *FayeServer) publishToChannel(channel, data string) {
 func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 	var group sync.WaitGroup
 	for i := range subs {
+		fmt.Println("subs[i]: ", subs[i])
 		group.Add(1)
 		go func(client chan<- []byte, data string) {
-			client <- []byte(data)
+			if client != nil {
+				fmt.Println("WRITE FOR CLIENT")
+				client <- []byte(data)
+			} else {
+				fmt.Println("NO CHANNEL DON'T TRY TO WRITE")
+			}
 			group.Done()
 		}(subs[i].WriteChannel, data)
 	}
@@ -85,11 +93,12 @@ func (f *FayeServer) DisconnectChannel(c chan []byte) {
 // ========
 
 type FayeMessage struct {
-	Channel      string      `json:"channel"`
-	ClientId     string      `json:"clientId,omitempty"`
-	Subscription string      `json:"subscription,omitempty"`
-	Data         interface{} `json:"data,omitempty"`
-	Id           string      `json:"id,omitempty"`
+	Channel                  string      `json:"channel"`
+	ClientId                 string      `json:"clientId,omitempty"`
+	Subscription             string      `json:"subscription,omitempty"`
+	Data                     interface{} `json:"data,omitempty"`
+	Id                       string      `json:"id,omitempty"`
+	SupportedConnectionTypes []string    `json:"supportedConnectionTypes,omitempty"`
 }
 
 // Message handling
@@ -100,7 +109,16 @@ func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error
 	err := json.Unmarshal(message, &fm)
 
 	if err != nil {
-		fmt.Println("Error parsing message json")
+		fmt.Println("Error parsing message json, try array parse:", err)
+
+		ar := []FayeMessage{}
+		jerr := json.Unmarshal(message, &ar)
+		if jerr != nil {
+			fmt.Println("Error parsing message json as array:", err)
+		} else {
+			fm = ar[0]
+			fmt.Println("Parsed as: ", fm)
+		}
 	}
 
 	switch fm.Channel {
@@ -177,14 +195,17 @@ Bayeux Handshake response
 */
 
 func (f *FayeServer) handshake() ([]byte, error) {
+	fmt.Println("handshake!")
+
 	// build response
 	resp := FayeResponse{
+		Id:                       "1",
 		Channel:                  "/meta/handshake",
 		Successful:               true,
 		Version:                  "1.0",
-		SupportedConnectionTypes: []string{"websocket"},
+		SupportedConnectionTypes: []string{"websocket", "callback-polling", "long-polling", "cross-origin-long-polling", "eventsource", "in-process"},
 		ClientId:                 generateClientId(),
-		Advice:                   map[string]interface{}{"reconnect": "retry"},
+		Advice:                   map[string]interface{}{"reconnect": "retry", "interval": 0, "timeout": 45000},
 	}
 
 	// wrap it in an array & convert to json
@@ -359,6 +380,9 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 		fmt.Println("Error parsing message!")
 		return []byte{}, errors.New("Invalid Message Data")
 	}
+	fmt.Println("publish to: ", channel)
+	fmt.Println("data: ", string(dataStr))
+
 	f.publishToChannel(channel, string(dataStr))
 
 	resp := FayeResponse{
@@ -377,4 +401,9 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 */
 func generateClientId() string {
 	return uuid.UUID4()
+}
+
+func (f *FayeServer) nextMessageId() string {
+	f.idCount += 1
+	return string(f.idCount)
 }

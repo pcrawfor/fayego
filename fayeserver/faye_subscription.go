@@ -92,16 +92,38 @@ func (f *FayeServer) addClientToSubscription(clientId, subscription string, c ch
 
 	index := f.subscriptionClientIndex(subs, clientId)
 
+	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[subscription]))
+
 	if index < 0 {
 		f.Subscriptions[subscription] = append(subs, *client)
 		return true
 	}
 
-	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[subscription]))
 	return false
 }
 
 // client management
+
+/*
+updateClientChannel
+*/
+func (f *FayeServer) UpdateClientChannel(clientId string, c chan []byte) bool {
+	fmt.Println("update client for channel: clientId: ", clientId)
+	f.ClientMutex.Lock()
+	defer f.ClientMutex.Unlock()
+	client, ok := f.Clients[clientId]
+	if !ok {
+		client = Client{clientId, c, []string{}}
+		f.Clients[clientId] = client
+		return true
+	}
+
+	client.WriteChannel = c
+	f.Clients[clientId] = client
+	fmt.Println("Worked")
+
+	return true
+}
 
 /*
 Add Client to server only if the client is not already present
