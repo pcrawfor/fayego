@@ -198,55 +198,55 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 	resp := []fayeserver.FayeResponse{}
 	err := json.Unmarshal(message, &resp)
 	var fm fayeserver.FayeResponse
-	if len(resp) > 0 {
-		fm = resp[0]
-	}
 
 	if err != nil {
 		fmt.Println("Error parsing json. ", err)
 	}
 
-	switch fm.Channel {
-	case fayeserver.CHANNEL_HANDSHAKE:
-		f.clientId = fm.ClientId
-		f.connect() // send faye connect message
-		f.fayeState = StateFayeConnected
-		f.readyChan <- true
+	for i := range resp {
+		fm = resp[i]
+		switch fm.Channel {
+		case fayeserver.CHANNEL_HANDSHAKE:
+			f.clientId = fm.ClientId
+			f.connect() // send faye connect message
+			f.fayeState = StateFayeConnected
+			f.readyChan <- true
 
-	case fayeserver.CHANNEL_CONNECT:
-		//fmt.Println("Recv'd connect response")
+		case fayeserver.CHANNEL_CONNECT:
+			//fmt.Println("Recv'd connect response")
 
-	case fayeserver.CHANNEL_DISCONNECT:
-		f.fayeState = StateFayeDisconnected
-		f.disconnectFromServer()
+		case fayeserver.CHANNEL_DISCONNECT:
+			f.fayeState = StateFayeDisconnected
+			f.disconnectFromServer()
 
-	case fayeserver.CHANNEL_SUBSCRIBE:
-		f.updateSubscription(fm.Subscription, fm.Successful)
+		case fayeserver.CHANNEL_SUBSCRIBE:
+			f.updateSubscription(fm.Subscription, fm.Successful)
 
-	case fayeserver.CHANNEL_UNSUBSCRIBE:
-		if fm.Successful {
-			f.removeSubscription(fm.Subscription)
-		}
-	default:
-		if fm.Data != nil {
-			if fm.ClientId == f.clientId {
-				return nil
+		case fayeserver.CHANNEL_UNSUBSCRIBE:
+			if fm.Successful {
+				f.removeSubscription(fm.Subscription)
 			}
-			var data map[string]interface{}
-			var ext map[string]interface{}
-
+		default:
 			if fm.Data != nil {
-				data = fm.Data.(map[string]interface{})
-			}
+				if fm.ClientId == f.clientId {
+					return nil
+				}
+				var data map[string]interface{}
+				var ext map[string]interface{}
 
-			if fm.Ext != nil {
-				ext = fm.Ext.(map[string]interface{})
-			}
+				if fm.Data != nil {
+					data = fm.Data.(map[string]interface{})
+				}
 
-			// tell the client we got a message on a channel
-			go func(d, e map[string]interface{}) {
-				f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: d, Ext: e}
-			}(data, ext)
+				if fm.Ext != nil {
+					ext = fm.Ext.(map[string]interface{})
+				}
+
+				// tell the client we got a message on a channel
+				go func(d, e map[string]interface{}) {
+					f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: d, Ext: e}
+				}(data, ext)
+			}
 		}
 	}
 
