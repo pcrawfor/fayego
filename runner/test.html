@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN""
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <title>GO Faye Test</title>
+
+  <style type="text/css">
+    body {
+    font-family: Helvetica, Arial, sans-serif;
+    }
+     
+    h1 {
+      padding: 1em;
+      border: 1px black dashed;
+    }
+     
+    h2 {
+      padding-left: 2em;
+    }
+  </style>
+
+
+</head>
+<body>
+  <h1 id="heading">Connection Test</h1>
+  <h2>Connection: <span id="test1">PENDING</span></h2>
+  <h2>Subscription: <span id="test2">PENDING</span></h2>
+  <h2>Sending: <span id="test3">PENDING</span></h2>
+  <h2>Receiving: <span id="test4">PENDING</span></h2>
+  <h2>Send-receive iterated: <span id="test5">PENDING</span></h2>
+</body>
+</html>
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN""
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <title>GO Faye Test</title>
+  <script src="faye-browser.js" type="text/javascript" charset="utf-8"></script>
+    <script type="text/javascript">
+    // function randomString(sChrs, iLen) {
+    //     var sRnd = '';
+    //     for (var i = 0; i < iLen; i++) {
+    //         var randomPoz = Math.floor(Math.random() * sChrs.length);
+    //         sRnd += sChrs.substring(randomPoz, randomPoz + 1);
+    //     }
+    //     return sRnd;
+    // }
+    // Faye.Transport.WebSocket.isUsable = function($, _, c) { c(true) };
+    // Faye.XHRTransport.WebSocket.isUsable = function($, _, c) { c(false) };
+    // Faye.JSONPTransport.WebSocket.isUsable = function($, _, c) { c(false) };
+    Faye.Logging.logLevel = 0;
+    var client = new Faye.Client('http://localhost:3002/faye');
+    client.disable('websocket');
+    // client.Transport.WebSocket.isUsable = function($, _, c) { c(true) };
+    // client.XHRTransport.WebSocket.isUsable = function($, _, c) { c(false) };
+    // client.JSONPTransport.WebSocket.isUsable = function($, _, c) { c(false) };
+
+    var sendMessage = function() {
+      var msg = document.getElementById('reply').value;
+      console.log("send message: " + msg);
+      client.publish("/foo", {message: msg});
+      document.getElementById('reply').value = "";
+      return false;
+    };
+
+    var subscription = client.subscribe('/foo', function(message) {
+        console.log('MESSAGE TIME:' + message);
+        console.log(message);
+        document.getElementById('test1').innerHTML = 'OK';
+        if (message.text == 'OK') {
+            document.getElementById('test4').innerHTML = 'OK';
+        } else {
+            document.getElementById('test4').innerHTML = 'FAILED';
+        }
+    });
+
+    subscription.callback(function() {
+        document.getElementById('test2').innerHTML = 'OK';
+    });
+
+    subscription.errback(function(error) {
+        document.getElementById('test2').innerHTML = 'FAILED';
+    });
+
+    setTimeout(function() {
+        try {
+            client.publish('/foo', {
+                text: 'OK',
+                message: 'Hi from long-poll'
+            });
+            document.getElementById('test3').innerHTML = 'OK';
+        } catch (e) {
+            document.getElementById('test3').innerHTML = 'FAILED';
+        }        
+
+        client.subscribe('/foo', function(message) {
+          // handle message          
+          document.getElementById('msg').innerHTML = message.message;
+        });
+
+    }, 2000);
+
+    // var globalcount = 0;
+    // var TOTAL = 100;
+
+    // function massive() {
+    //     var subscription = client.subscribe('/massive', function(message) {
+    //         if (message.title == 'MASSIVE') {
+    //             globalcount++;
+    //             document.getElementById('test5').innerHTML = globalcount;
+    //         }
+    //     });
+    //     subscription.errback(function() {
+    //         document.getElementById('test5').innerHTML = 'FAILED (subs)';
+    //     });
+    //     subscription.callback(function() {
+    //         document.getElementById('test5').innerHTML = 'STARTED';
+    //         for (var i = 0; i < TOTAL; i++) {
+    //             setTimeout(function() {
+    //                 client.publish('/massive', {
+    //                     title: 'MASSIVE',
+    //                     count: i,
+    //                     data: randomString('ABCDEFGHIJKLMNOPQ', 2000)
+    //                 });
+    //             }, i);
+    //         }
+    //         setTimeout(function() {
+    //             if (globalcount == TOTAL) {
+    //                 document.getElementById('test5').innerHTML = 'OK';
+
+    //             } else {
+    //                 document.getElementById('test3').innerHTML = 'FAILED (count)';
+    //             }
+    //         }, 2000);
+    //     });
+    // }
+
+    // setTimeout(massive, 3000);
+  </script>
+
+</head>
+<body>
+  <h1 id="heading">GO Connection Test</h1>
+  <h2>Message: <span id="msg"></span></h2>
+  <form onsubmit="return false;">  
+    Reply: <input type="text" name="reply" id="reply">
+    <button type="button" onclick="sendMessage()">Send</button>    
+  </form>
+  <h2>Connection: <span id="test1">PENDING</span></h2>
+  <h2>Subscription: <span id="test2">PENDING</span></h2>
+  <h2>Sending: <span id="test3">PENDING</span></h2>
+  <h2>Receiving: <span id="test4">PENDING</span></h2>
+  <h2>Send-receive iterated: <span id="test5">PENDING</span></h2>
+</body>
+</html>
