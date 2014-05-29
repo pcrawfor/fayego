@@ -6,6 +6,6 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting faye server on port 3000")
+	fmt.Println("Starting faye server on port 3002")
 	fayeserver.Start(":3002")
 }
