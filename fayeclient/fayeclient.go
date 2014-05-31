@@ -85,6 +85,7 @@ type FayeClient struct {
 	messageNumber int
 	subscriptions []*ClientSubscription
 	keepAliveSecs int
+	keepAliveChan chan bool
 }
 
 type ClientMessage struct {
@@ -98,7 +99,7 @@ func NewFayeClient(host string) *FayeClient {
 		host = DEFAULT_HOST
 	}
 	// instantiate a FayeClient and return
-	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan ClientMessage, 100), messageNumber: 0, keepAliveSecs: DEFAULT_KEEP_ALIVE_SECS}
+	return &FayeClient{Host: host, fayeState: StateWSDisconnected, MessageChan: make(chan ClientMessage, 100), messageNumber: 0, keepAliveSecs: DEFAULT_KEEP_ALIVE_SECS, keepAliveChan: make(chan bool)}
 }
 
 func (f *FayeClient) SetKeepAliveIntervalSeconds(secs int) {
@@ -123,6 +124,7 @@ Open the websocket connection to the faye server and initialize the client state
 */
 func (f *FayeClient) connectToServer() error {
 	fmt.Println("start client")
+	fmt.Println("connectToServer")
 
 	url, _ := url.Parse("ws://" + f.Host)
 	c, err := net.Dial("tcp", url.Host)
@@ -150,26 +152,38 @@ func (f *FayeClient) connectToServer() error {
 	f.conn.readerConnected = true
 	go conn.writer()
 	go conn.reader(f)
+
+	// close keep alive channel to stop any running keep alive
+	close(f.keepAliveChan)
+	f.keepAliveChan = make(chan bool)
 	go f.keepAlive()
 	return nil
 }
 
 func (f *FayeClient) keepAlive() {
+	fmt.Println("START KEEP ALIVE")
 	c := time.Tick(time.Duration(f.keepAliveSecs) * time.Second)
 	for {
 		select {
+		case _, ok := <-f.keepAliveChan:
+			if !ok {
+				fmt.Println("exit keep alive")
+				return
+			}
 		case <-c:
 			fmt.Println("Send keep-alive: ", time.Now())
 			f.connect()
 		}
 
 	}
+	fmt.Println("exiting keepalive func")
 }
 
 /*
 Close the websocket connection and set the faye client state
 */
 func (f *FayeClient) disconnectFromServer() {
+	fmt.Println("DISCONNECT FROM SERVER")
 	f.fayeState = StateWSDisconnected
 	f.conn.exit <- true
 	f.conn.ws.Close()
@@ -383,6 +397,7 @@ Encode the json and send the message over the wire.
 func (f *FayeClient) writeMessage(message fayeserver.FayeResponse) error {
 	if !f.conn.Connected() {
 		// reconnect
+		fmt.Println("RECONNECT")
 		cerr := f.connectToServer()
 		if cerr != nil {
 			return cerr

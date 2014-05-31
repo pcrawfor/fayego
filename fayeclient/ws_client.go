@@ -67,6 +67,7 @@ func (c *Connection) reader(f FayeHandler) {
 	for {
 		_, message, err := c.ws.ReadMessage()
 		if err != nil {
+			fmt.Println("READ ERROR: ", err)
 			break
 		}
 
