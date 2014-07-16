@@ -258,7 +258,12 @@ func (f *FayeClient) HandleMessage(message []byte) error {
 
 				// tell the client we got a message on a channel
 				go func(d, e map[string]interface{}) {
-					f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: d, Ext: e}
+					select {
+					case f.MessageChan <- ClientMessage{Channel: fm.Channel, Data: d, Ext: e}:
+						return
+					case <-time.After(100 * time.Millisecond):
+						return
+					}
 				}(data, ext)
 			}
 		}
