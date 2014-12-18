@@ -142,8 +142,6 @@ func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error
 		fmt.Println("data is: ", fm.Data)
 		return f.publish(fm.Channel, fm.Id, fm.Data)
 	}
-
-	return []byte{}, errors.New("Invalid Faye Message")
 }
 
 /*
@@ -404,6 +402,6 @@ func generateClientId() string {
 }
 
 func (f *FayeServer) nextMessageId() string {
-	f.idCount += 1
+	f.idCount++
 	return string(f.idCount)
 }
