@@ -8,8 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/serverhorror/uuid"
 	"sync"
+
+	"code.google.com/p/go-uuid/uuid"
 )
 
 const CHANNEL_HANDSHAKE = "/meta/handshake"
@@ -398,7 +399,7 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 	Generate a clientId for use in the communication with the client
 */
 func generateClientId() string {
-	return uuid.UUID4()
+	return uuid.New()
 }
 
 func (f *FayeServer) nextMessageId() string {
