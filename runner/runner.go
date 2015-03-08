@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/pcrawfor/fayego/fayeserver"
 )
 
 func main() {
-	fmt.Println("Starting faye server on port 3002")
-	fayeserver.Start(":3002")
+	port := ":8000"
+	fmt.Println("Starting faye server on port", port)
+	fayeserver.Start(port)
 }
