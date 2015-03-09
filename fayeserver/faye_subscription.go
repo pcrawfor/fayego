@@ -120,7 +120,6 @@ func (f *FayeServer) UpdateClientChannel(clientId string, c chan []byte) bool {
 
 	client.WriteChannel = c
 	f.Clients[clientId] = client
-	fmt.Println("Worked")
 
 	return true
 }
