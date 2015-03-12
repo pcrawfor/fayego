@@ -13,16 +13,17 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/pcrawfor/fayego/fayeclient"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/pcrawfor/fayego/client"
 )
 
 func main() {
 	fmt.Println("Faye Client Runner start")
 
-	client := fayeclient.NewFayeClient("localhost:8000/faye")
+	client := client.NewClient("localhost:8000/faye")
 
 	ready := make(chan bool)
 	err := client.Start(ready)
@@ -66,7 +67,7 @@ func main() {
 /*
 Listen for messages from the client's message channel and print them to stdout
 */
-func recvMessages(client *fayeclient.FayeClient) {
+func recvMessages(client *client.Client) {
 	for {
 		select {
 		case message, ok := <-client.MessageChan:
@@ -79,14 +80,14 @@ func recvMessages(client *fayeclient.FayeClient) {
 	}
 }
 
-func quit(client *fayeclient.FayeClient) {
+func quit(client *client.Client) {
 	client.Unsubscribe("/testing")
 	client.Disconnect()
 	os.Exit(0)
 }
 
 // read from stdin
-func read(client *fayeclient.FayeClient) {
+func read(client *client.Client) {
 	s := bufio.NewScanner(os.Stdin)
 	for s.Scan() {
 		m := s.Text()
