@@ -1,13 +1,11 @@
-/*
-	Faye Server
-
-*/
+// package fayeserver implements the faye specific message handling and server logic for a faye backend server
 package fayeserver
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -383,6 +381,7 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 	fmt.Println("data: ", string(dataStr))
 
 	f.publishToChannel(channel, string(dataStr))
+	f.publishToWildcard(channel, string(dataStr))
 
 	resp := FayeResponse{
 		Channel:    channel,
@@ -391,6 +390,15 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 	}
 
 	return json.Marshal([]FayeResponse{resp})
+}
+
+func (f *FayeServer) publishToWildcard(channel, dataStr string) {
+	parts := strings.Split(channel, "/")
+	parts = parts[:len(parts)-1]
+	parts = append(parts, "*")
+	wildcardChannel := strings.Join(parts, "/")
+	fmt.Println("WILDCARD: ", wildcardChannel)
+	f.publishToChannel(wildcardChannel, dataStr)
 }
 
 // Helper functions:
