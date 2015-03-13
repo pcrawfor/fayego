@@ -49,7 +49,7 @@ const (
 	maxMessageSize = 1024
 )
 
-func (c *Connection) esWriter(f *FayeServer) {
+func (c *Connection) esWriter(f *Server) {
 	fmt.Println("Writer started.")
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -76,9 +76,9 @@ func (c *Connection) esWriter(f *FayeServer) {
 }
 
 /*
-reader - reads messages from the websocket connection and passes them through to the fayeserver message handler
+reader - reads messages from the websocket connection and passes them through to the server message handler
 */
-func (c *Connection) reader(f *FayeServer) {
+func (c *Connection) reader(f *Server) {
 	fmt.Println("reading...")
 	defer func() {
 		fmt.Println("reader disconnect")
@@ -124,7 +124,7 @@ func (c *Connection) wsWrite(mt int, payload []byte) error {
 /*
 writer - is the write loop that reads messages off the send channel and writes them out over the websocket connection
 */
-func (c *Connection) writer(f *FayeServer) {
+func (c *Connection) writer(f *Server) {
 	fmt.Println("Writer started.")
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -334,13 +334,13 @@ func isEventSource(r *http.Request) bool {
 	return accept == "text/event-stream"
 }
 
-var f *FayeServer
+var f *Server
 
 /*
 Start the Faye server on the address/port given in the addr param
 */
 func Start(addr string) {
-	f = NewFayeServer()
+	f = NewServer()
 	http.HandleFunc("/faye", serveWs)
 	http.HandleFunc("/", serveOther)
 

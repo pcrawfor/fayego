@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func serveLongPolling(f *FayeServer, w http.ResponseWriter, r *http.Request) {
+func serveLongPolling(f *Server, w http.ResponseWriter, r *http.Request) {
 	jsonMessage := r.FormValue("message")
 	//jsonpParam := r.FormValue("jsonp")
 

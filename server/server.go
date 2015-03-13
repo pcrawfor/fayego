@@ -1,4 +1,4 @@
-// package fayeserver implements the faye specific message handling and server logic for a faye backend server
+// package server implements the faye specific message handling and server logic for a faye backend server
 package server
 
 import (
@@ -11,7 +11,7 @@ import (
 	"github.com/pcrawfor/fayego/shared"
 )
 
-type FayeServer struct {
+type Server struct {
 	Connections   []Connection
 	Subscriptions map[string][]Client
 	SubMutex      sync.RWMutex
@@ -24,8 +24,8 @@ type FayeServer struct {
 /*
 Instantiate a new faye server
 */
-func NewFayeServer() *FayeServer {
-	return &FayeServer{Connections: []Connection{},
+func NewServer() *Server {
+	return &Server{Connections: []Connection{},
 		Subscriptions: make(map[string][]Client),
 		Clients:       make(map[string]Client),
 		core:          shared.Core{}}
@@ -35,7 +35,7 @@ func NewFayeServer() *FayeServer {
 /*
 
 */
-func (f *FayeServer) publishToChannel(channel, data string) {
+func (f *Server) publishToChannel(channel, data string) {
 	subs, ok := f.Subscriptions[channel]
 	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[channel]))
 	if ok {
@@ -46,7 +46,7 @@ func (f *FayeServer) publishToChannel(channel, data string) {
 /*
 
 */
-func (f *FayeServer) multiplexWrite(subs []Client, data string) {
+func (f *Server) multiplexWrite(subs []Client, data string) {
 	var group sync.WaitGroup
 	for i := range subs {
 		fmt.Println("subs[i]: ", subs[i])
@@ -64,7 +64,7 @@ func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 	group.Wait()
 }
 
-func (f *FayeServer) findClientForChannel(c chan []byte) *Client {
+func (f *Server) findClientForChannel(c chan []byte) *Client {
 	f.ClientMutex.Lock()
 	defer f.ClientMutex.Unlock()
 
@@ -77,7 +77,7 @@ func (f *FayeServer) findClientForChannel(c chan []byte) *Client {
 	return nil
 }
 
-func (f *FayeServer) DisconnectChannel(c chan []byte) {
+func (f *Server) DisconnectChannel(c chan []byte) {
 	client := f.findClientForChannel(c)
 	if client != nil {
 		fmt.Println("Disconnect Client: ", client.ClientId)
@@ -98,7 +98,7 @@ type FayeMessage struct {
 
 // Message handling
 
-func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
+func (f *Server) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
 	fmt.Println("Raw message:", string(message))
 
 	// parse message JSON
@@ -189,7 +189,7 @@ Bayeux Handshake response
 
 */
 
-func (f *FayeServer) handshake() ([]byte, error) {
+func (f *Server) handshake() ([]byte, error) {
 	fmt.Println("handshake!")
 
 	// build response
@@ -224,7 +224,7 @@ Example response
 ]
 */
 
-func (f *FayeServer) connect(clientId string) ([]byte, error) {
+func (f *Server) connect(clientId string) ([]byte, error) {
 	// TODO: setup client connection state
 
 	resp := FayeResponse{
@@ -252,7 +252,7 @@ Example response
 ]
 */
 
-func (f *FayeServer) disconnect(clientId string) ([]byte, error) {
+func (f *Server) disconnect(clientId string) ([]byte, error) {
 	// tear down client connection state
 	f.removeClientFromServer(clientId)
 
@@ -281,7 +281,7 @@ Example response
 ]
 */
 
-func (f *FayeServer) subscribe(clientId, subscription string, c chan []byte) ([]byte, error) {
+func (f *Server) subscribe(clientId, subscription string, c chan []byte) ([]byte, error) {
 
 	// subscribe the client to the given channel
 	if len(subscription) == 0 {
@@ -320,7 +320,7 @@ Example response
 ]
 */
 
-func (f *FayeServer) unsubscribe(clientId, subscription string) ([]byte, error) {
+func (f *Server) unsubscribe(clientId, subscription string) ([]byte, error) {
 	// TODO: unsubscribe the client from the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
@@ -361,7 +361,7 @@ Example response
 ]
 
 */
-func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, error) {
+func (f *Server) publish(channel, id string, data interface{}) ([]byte, error) {
 
 	//convert data back to json string
 	message := FayeResponse{
@@ -390,7 +390,7 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 	return json.Marshal([]FayeResponse{resp})
 }
 
-func (f *FayeServer) publishToWildcard(channel, dataStr string) {
+func (f *Server) publishToWildcard(channel, dataStr string) {
 	parts := strings.Split(channel, "/")
 	parts = parts[:len(parts)-1]
 	parts = append(parts, "*")
