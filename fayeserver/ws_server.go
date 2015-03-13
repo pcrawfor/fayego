@@ -97,7 +97,7 @@ func (c *Connection) reader(f *FayeServer) {
 		response, ferr := f.HandleMessage(message, c.send)
 		if ferr != nil {
 			fmt.Println("Faye Error: ", ferr)
-			c.send <- []byte(fmt.Sprintf("Error: ", ferr))
+			c.send <- []byte(fmt.Sprint("Error: ", ferr))
 		} else {
 			c.send <- response
 		}
