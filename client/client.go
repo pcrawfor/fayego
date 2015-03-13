@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/pcrawfor/fayego/fayeserver"
+	"github.com/pcrawfor/fayego/server"
 	"github.com/pcrawfor/fayego/shared"
 )
 
@@ -202,9 +202,9 @@ func (f *Client) Write(msg string) error {
 // HandleMessage parses and interprets a faye message response
 func (f *Client) HandleMessage(message []byte) error {
 	// parse the faye message and interpret the logic to set client state appropriately
-	resp := []fayeserver.FayeResponse{}
+	resp := []server.FayeResponse{}
 	err := json.Unmarshal(message, &resp)
-	var fm fayeserver.FayeResponse
+	var fm server.FayeResponse
 
 	if err != nil {
 		fmt.Println("Error parsing json. ", err)
@@ -213,23 +213,23 @@ func (f *Client) HandleMessage(message []byte) error {
 	for i := range resp {
 		fm = resp[i]
 		switch fm.Channel {
-		case fayeserver.CHANNEL_HANDSHAKE:
+		case server.CHANNEL_HANDSHAKE:
 			f.clientID = fm.ClientId
 			f.connect() // send faye connect message
 			f.fayeState = stateFayeConnected
 			f.readyChan <- true
 
-		case fayeserver.CHANNEL_CONNECT:
+		case server.CHANNEL_CONNECT:
 			//fmt.Println("Recv'd connect response")
 
-		case fayeserver.CHANNEL_DISCONNECT:
+		case server.CHANNEL_DISCONNECT:
 			f.fayeState = stateFayeDisconnected
 			f.disconnectFromServer()
 
-		case fayeserver.CHANNEL_SUBSCRIBE:
+		case server.CHANNEL_SUBSCRIBE:
 			f.updateSubscription(fm.Subscription, fm.Successful)
 
-		case fayeserver.CHANNEL_UNSUBSCRIBE:
+		case server.CHANNEL_UNSUBSCRIBE:
 			if fm.Successful {
 				f.removeSubscription(fm.Subscription)
 			}
@@ -316,7 +316,7 @@ type FayeResponse struct {
 /*
  */
 func (f *Client) handshake() {
-	message := fayeserver.FayeResponse{Channel: fayeserver.CHANNEL_HANDSHAKE, Version: "1.0", SupportedConnectionTypes: []string{"websocket"}}
+	message := server.FayeResponse{Channel: server.CHANNEL_HANDSHAKE, Version: "1.0", SupportedConnectionTypes: []string{"websocket"}}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating handshake message")
@@ -325,7 +325,7 @@ func (f *Client) handshake() {
 
 // connect to Faye and send the connect message
 func (f *Client) connect() {
-	message := fayeserver.FayeResponse{Channel: fayeserver.CHANNEL_CONNECT, ClientId: f.clientID, ConnectionType: "websocket"}
+	message := server.FayeResponse{Channel: server.CHANNEL_CONNECT, ClientId: f.clientID, ConnectionType: "websocket"}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating connect message")
@@ -334,7 +334,7 @@ func (f *Client) connect() {
 
 // disconnect sends the disconnect message to the server
 func (f *Client) disconnect() {
-	message := fayeserver.FayeResponse{Channel: fayeserver.CHANNEL_DISCONNECT, ClientId: f.clientID}
+	message := server.FayeResponse{Channel: server.CHANNEL_DISCONNECT, ClientId: f.clientID}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating connect message")
@@ -343,7 +343,7 @@ func (f *Client) disconnect() {
 
 // subscribe the client to a channel
 func (f *Client) subscribe(channel string) error {
-	message := fayeserver.FayeResponse{Channel: fayeserver.CHANNEL_SUBSCRIBE, ClientId: f.clientID, Subscription: channel}
+	message := server.FayeResponse{Channel: server.CHANNEL_SUBSCRIBE, ClientId: f.clientID, Subscription: channel}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating subscribe message")
@@ -354,7 +354,7 @@ func (f *Client) subscribe(channel string) error {
 
 // unsubscribe from a channel
 func (f *Client) unsubscribe(channel string) error {
-	message := fayeserver.FayeResponse{Channel: fayeserver.CHANNEL_UNSUBSCRIBE, ClientId: f.clientID, Subscription: channel}
+	message := server.FayeResponse{Channel: server.CHANNEL_UNSUBSCRIBE, ClientId: f.clientID, Subscription: channel}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating unsubscribe message")
@@ -365,7 +365,7 @@ func (f *Client) unsubscribe(channel string) error {
 
 // publish sends a message to a channel
 func (f *Client) publish(channel string, data map[string]interface{}) error {
-	message := fayeserver.FayeResponse{Channel: channel, ClientId: f.clientID, Id: f.core.NextMessageID(), Data: data}
+	message := server.FayeResponse{Channel: channel, ClientId: f.clientID, Id: f.core.NextMessageID(), Data: data}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating unsubscribe message")
@@ -375,7 +375,7 @@ func (f *Client) publish(channel string, data map[string]interface{}) error {
 }
 
 // writeMessage encodes the json and send the message over the wire.
-func (f *Client) writeMessage(message fayeserver.FayeResponse) error {
+func (f *Client) writeMessage(message server.FayeResponse) error {
 	if !f.conn.Connected() {
 		// reconnect
 		fmt.Println("RECONNECT")

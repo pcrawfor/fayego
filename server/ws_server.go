@@ -8,16 +8,17 @@ TODO: cross-origin-polling
 Created by Paul Crawford
 Copyright (c) 2013. All rights reserved.
 */
-package fayeserver
+package server
 
 import (
 	"fmt"
-	eventsource "github.com/antage/eventsource/http"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	eventsource "github.com/antage/eventsource/http"
+	"github.com/gorilla/websocket"
 )
 
 // =====

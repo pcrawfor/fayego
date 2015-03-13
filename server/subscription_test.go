@@ -1,4 +1,4 @@
-package fayeserver
+package server
 
 import "testing"
 

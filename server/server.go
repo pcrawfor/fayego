@@ -1,5 +1,5 @@
 // package fayeserver implements the faye specific message handling and server logic for a faye backend server
-package fayeserver
+package server
 
 import (
 	"encoding/json"
@@ -103,6 +103,8 @@ type FayeMessage struct {
 // Message handling
 
 func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
+	fmt.Println("Raw message:", string(message))
+
 	// parse message JSON
 	fm := FayeMessage{}
 	err := json.Unmarshal(message, &fm)
