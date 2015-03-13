@@ -8,14 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/pcrawfor/fayego/shared"
 )
-
-const CHANNEL_HANDSHAKE = "/meta/handshake"
-const CHANNEL_CONNECT = "/meta/connect"
-const CHANNEL_DISCONNECT = "/meta/disconnect"
-const CHANNEL_SUBSCRIBE = "/meta/subscribe"
-const CHANNEL_UNSUBSCRIBE = "/meta/unsubscribe"
 
 type FayeServer struct {
 	Connections   []Connection
@@ -24,6 +18,7 @@ type FayeServer struct {
 	Clients       map[string]Client
 	ClientMutex   sync.RWMutex
 	idCount       int
+	core          shared.Core
 }
 
 /*
@@ -32,7 +27,8 @@ Instantiate a new faye server
 func NewFayeServer() *FayeServer {
 	return &FayeServer{Connections: []Connection{},
 		Subscriptions: make(map[string][]Client),
-		Clients:       make(map[string]Client)}
+		Clients:       make(map[string]Client),
+		core:          shared.Core{}}
 }
 
 // general message handling
@@ -123,19 +119,19 @@ func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error
 	}
 
 	switch fm.Channel {
-	case CHANNEL_HANDSHAKE:
+	case shared.ChannelHandshake:
 		fmt.Println("handshake")
 		return f.handshake()
-	case CHANNEL_CONNECT:
+	case shared.ChannelConnect:
 		fmt.Println("connect")
 		return f.connect(fm.ClientId)
-	case CHANNEL_DISCONNECT:
+	case shared.ChannelDisconnect:
 		fmt.Println("disconnect")
 		return f.disconnect(fm.ClientId)
-	case CHANNEL_SUBSCRIBE:
+	case shared.ChannelSubscribe:
 		fmt.Println("subscribe")
 		return f.subscribe(fm.ClientId, fm.Subscription, c)
-	case CHANNEL_UNSUBSCRIBE:
+	case shared.ChannelUnsubscribe:
 		fmt.Println("subscribe")
 		return f.unsubscribe(fm.ClientId, fm.Subscription)
 	default:
@@ -203,7 +199,7 @@ func (f *FayeServer) handshake() ([]byte, error) {
 		Successful:               true,
 		Version:                  "1.0",
 		SupportedConnectionTypes: []string{"websocket", "callback-polling", "long-polling", "cross-origin-long-polling", "eventsource", "in-process"},
-		ClientId:                 generateClientId(),
+		ClientId:                 f.core.GenerateClientID(),
 		Advice:                   map[string]interface{}{"reconnect": "retry", "interval": 0, "timeout": 45000},
 	}
 
@@ -401,18 +397,4 @@ func (f *FayeServer) publishToWildcard(channel, dataStr string) {
 	wildcardChannel := strings.Join(parts, "/")
 	fmt.Println("WILDCARD: ", wildcardChannel)
 	f.publishToChannel(wildcardChannel, dataStr)
-}
-
-// Helper functions:
-
-/*
-	Generate a clientId for use in the communication with the client
-*/
-func generateClientId() string {
-	return uuid.New()
-}
-
-func (f *FayeServer) nextMessageId() string {
-	f.idCount++
-	return string(f.idCount)
 }
