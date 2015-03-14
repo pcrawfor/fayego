@@ -14,35 +14,35 @@ func TestClient(t *testing.T) {
 }
 
 func TestAddingRemovingClient(t *testing.T) {
-	s := NewFayeServer()
-	clientId := "foo"
+	s := NewServer()
+	clientID := "foo"
 	subscription := "bar"
-	c := s.addClientToServer(clientId, subscription, nil)
+	c := s.addClientToServer(clientID, subscription, nil)
 	if !c.isSubscribed(subscription) {
 		t.Error("Should be subscribed to foo")
 	}
 
-	_, ok := s.Clients[clientId]
+	_, ok := s.Clients[clientID]
 	if !ok {
 		t.Error("Client not in client list should have been added")
 	}
 
-	e := s.removeClientFromServer(clientId)
+	e := s.removeClientFromServer(clientID)
 	if e != nil {
 		t.Error("Error removing client: ", e.Error())
 	}
 
-	_, ok = s.Clients[clientId]
+	_, ok = s.Clients[clientID]
 	if ok {
 		t.Error("Client still in client list should have been removed")
 	}
 }
 
 func TestAddingRemovingSubscription(t *testing.T) {
-	s := NewFayeServer()
-	clientId := "foo"
+	s := NewServer()
+	clientID := "foo"
 	subscription := "bar"
-	ok := s.addClientToSubscription(clientId, subscription, nil)
+	ok := s.addClientToSubscription(clientID, subscription, nil)
 	if !ok {
 		t.Error("Failed to add client to subscription")
 	}
@@ -52,12 +52,12 @@ func TestAddingRemovingSubscription(t *testing.T) {
 		t.Error("Subscription not present should have been added")
 	}
 
-	rok := s.removeClientFromSubscription(clientId, subscription)
+	rok := s.removeClientFromSubscription(clientID, subscription)
 	if !rok {
 		t.Error("Failed to remove client from subscription")
 	}
 
-	c, cok := s.Clients[clientId]
+	c, cok := s.Clients[clientID]
 	if !cok {
 		t.Error("Client still in client list should have been removed")
 	}
@@ -70,17 +70,17 @@ func TestAddingRemovingSubscription(t *testing.T) {
 func TestUpdatingClientChannel(t *testing.T) {
 	c := make(chan []byte)
 
-	s := NewFayeServer()
-	clientId := "foo"
+	s := NewServer()
+	clientID := "foo"
 	subscription := "bar"
-	ok := s.addClientToSubscription(clientId, subscription, nil)
+	ok := s.addClientToSubscription(clientID, subscription, nil)
 	if !ok {
 		t.Error("Failed to add client to subscription")
 	}
 
-	s.UpdateClientChannel(clientId, c)
+	s.UpdateClientChannel(clientID, c)
 
-	client, cok := s.Clients[clientId]
+	client, cok := s.Clients[clientID]
 	if !cok {
 		t.Error("Client not in client list should have been added")
 	}

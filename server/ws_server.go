@@ -1,13 +1,3 @@
-/*
-TODO: factor out the code and clean things up a little, commit - works with firefox/chrome/safari on mac with long-polling/eventsource support
-TODO: pure long-polling
-TODO: callback-polling
-TODO: cross-origin-polling
-*/
-/*
-Created by Paul Crawford
-Copyright (c) 2013. All rights reserved.
-*/
 package server
 
 import (
@@ -23,7 +13,14 @@ import (
 
 // =====
 // WebSocket handling
+/*
+TODO: factor out the code and clean things up a little, commit - works with firefox/chrome/safari on mac with long-polling/eventsource support
+TODO: pure long-polling
+TODO: callback-polling
+TODO: cross-origin-polling
+*/
 
+// Connection represents a websocket connection along with reader and writer state
 type Connection struct {
 	ws          *websocket.Conn
 	es          eventsource.EventSource
@@ -224,13 +221,13 @@ func serveOther(w http.ResponseWriter, r *http.Request) {
 func handleEventSource(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Handle event source: ", r.URL.Path)
 	// create a new connection for the event source action
-	clientId := strings.Split(r.URL.Path, "/")[2]
-	fmt.Println("clientID: ", clientId)
+	clientID := strings.Split(r.URL.Path, "/")[2]
+	fmt.Println("clientID: ", clientID)
 	es := eventsource.New(nil, nil)
 	c := &Connection{send: make(chan []byte, 256), es: es, isWebsocket: false}
 	// TODO: NEED TO ASSOCIATED THE EXISTING FAYE CLIENT INFO/SUBSCRIPTIONS WITH THE CONNECTION CHANNEL
 	// USE CLIENT ID TO UPDATE FAYE INFO WITH ES CONNETION CHANNEL
-	f.UpdateClientChannel(clientId, c.send)
+	f.UpdateClientChannel(clientID, c.send)
 	go c.esWriter(f)
 	c.es.ServeHTTP(w, r)
 	return

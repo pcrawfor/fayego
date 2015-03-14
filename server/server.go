@@ -1,4 +1,4 @@
-// package server implements the faye specific message handling and server logic for a faye backend server
+// Package server implements the faye specific message handling and server logic for a faye backend server
 package server
 
 import (
@@ -11,19 +11,17 @@ import (
 	"github.com/pcrawfor/fayego/shared"
 )
 
+// Server is the main faye server object which manages connections, subscriptions and clients
 type Server struct {
 	Connections   []Connection
 	Subscriptions map[string][]Client
 	SubMutex      sync.RWMutex
 	Clients       map[string]Client
 	ClientMutex   sync.RWMutex
-	idCount       int
 	core          shared.Core
 }
 
-/*
-Instantiate a new faye server
-*/
+// NewServer returns and instance of Server
 func NewServer() *Server {
 	return &Server{Connections: []Connection{},
 		Subscriptions: make(map[string][]Client),
@@ -31,10 +29,7 @@ func NewServer() *Server {
 		core:          shared.Core{}}
 }
 
-// general message handling
-/*
-
-*/
+// publishToChannel publishes the message data string to the given channel
 func (f *Server) publishToChannel(channel, data string) {
 	subs, ok := f.Subscriptions[channel]
 	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[channel]))
@@ -43,9 +38,7 @@ func (f *Server) publishToChannel(channel, data string) {
 	}
 }
 
-/*
-
-*/
+// multiplexWrite sends data to the subscriptions provided
 func (f *Server) multiplexWrite(subs []Client, data string) {
 	var group sync.WaitGroup
 	for i := range subs {
@@ -64,40 +57,40 @@ func (f *Server) multiplexWrite(subs []Client, data string) {
 	group.Wait()
 }
 
+// findClientForChannel looks up the client associated with a given write channel
 func (f *Server) findClientForChannel(c chan []byte) *Client {
 	f.ClientMutex.Lock()
 	defer f.ClientMutex.Unlock()
 
 	for _, client := range f.Clients {
 		if client.WriteChannel == c {
-			fmt.Println("Matched Client: ", client.ClientId)
+			fmt.Println("Matched Client: ", client.ClientID)
 			return &client
 		}
 	}
 	return nil
 }
 
+// DisconnectChannel disconnects from the given channel sending the faye disconnect message
 func (f *Server) DisconnectChannel(c chan []byte) {
 	client := f.findClientForChannel(c)
 	if client != nil {
-		fmt.Println("Disconnect Client: ", client.ClientId)
-		f.removeClientFromServer(client.ClientId)
+		fmt.Println("Disconnect Client: ", client.ClientID)
+		f.removeClientFromServer(client.ClientID)
 	}
 }
 
-// ========
-
+// FayeMessage represents an incoming Faye message along with the associated fields
 type FayeMessage struct {
 	Channel                  string      `json:"channel"`
-	ClientId                 string      `json:"clientId,omitempty"`
+	ClientID                 string      `json:"clientId,omitempty"`
 	Subscription             string      `json:"subscription,omitempty"`
 	Data                     interface{} `json:"data,omitempty"`
-	Id                       string      `json:"id,omitempty"`
+	ID                       string      `json:"id,omitempty"`
 	SupportedConnectionTypes []string    `json:"supportedConnectionTypes,omitempty"`
 }
 
-// Message handling
-
+// HandleMessage is the core Faye message handler for the server, it interprets each faye message and triggers the appropriate response
 func (f *Server) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
 	fmt.Println("Raw message:", string(message))
 
@@ -124,38 +117,35 @@ func (f *Server) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
 		return f.handshake()
 	case shared.ChannelConnect:
 		fmt.Println("connect")
-		return f.connect(fm.ClientId)
+		return f.connect(fm.ClientID)
 	case shared.ChannelDisconnect:
 		fmt.Println("disconnect")
-		return f.disconnect(fm.ClientId)
+		return f.disconnect(fm.ClientID)
 	case shared.ChannelSubscribe:
 		fmt.Println("subscribe")
-		return f.subscribe(fm.ClientId, fm.Subscription, c)
+		return f.subscribe(fm.ClientID, fm.Subscription, c)
 	case shared.ChannelUnsubscribe:
 		fmt.Println("subscribe")
-		return f.unsubscribe(fm.ClientId, fm.Subscription)
+		return f.unsubscribe(fm.ClientID, fm.Subscription)
 	default:
 		fmt.Println("publish")
 		fmt.Println("data is: ", fm.Data)
-		return f.publish(fm.Channel, fm.Id, fm.Data)
+		return f.publish(fm.Channel, fm.ID, fm.Data)
 	}
 }
 
-/*
-FayeResponse
-*/
-
+// FayeResponse represents a Faye response message and all associated fields
 type FayeResponse struct {
 	Channel                  string                 `json:"channel,omitempty"`
 	Successful               bool                   `json:"successful,omitempty"`
 	Version                  string                 `json:"version,omitempty"`
 	SupportedConnectionTypes []string               `json:"supportedConnectionTypes,omitempty"`
 	ConnectionType           string                 `json:"connectionType,omitempty"`
-	ClientId                 string                 `json:"clientId,omitempty"`
+	ClientID                 string                 `json:"clientId,omitempty"`
 	Advice                   map[string]interface{} `json:"advice,omitempty"`
 	Subscription             string                 `json:"subscription,omitempty"`
 	Error                    string                 `json:"error,omitempty"`
-	Id                       string                 `json:"id,omitempty"`
+	ID                       string                 `json:"id,omitempty"`
 	Data                     interface{}            `json:"data,omitempty"`
 	Ext                      interface{}            `json:"ext,omitempty"`
 }
@@ -194,12 +184,12 @@ func (f *Server) handshake() ([]byte, error) {
 
 	// build response
 	resp := FayeResponse{
-		Id:                       "1",
+		ID:                       "1",
 		Channel:                  "/meta/handshake",
 		Successful:               true,
 		Version:                  "1.0",
 		SupportedConnectionTypes: []string{"websocket", "callback-polling", "long-polling", "cross-origin-long-polling", "eventsource", "in-process"},
-		ClientId:                 f.core.GenerateClientID(),
+		ClientID:                 f.core.GenerateClientID(),
 		Advice:                   map[string]interface{}{"reconnect": "retry", "interval": 0, "timeout": 45000},
 	}
 
@@ -224,14 +214,14 @@ Example response
 ]
 */
 
-func (f *Server) connect(clientId string) ([]byte, error) {
+func (f *Server) connect(clientID string) ([]byte, error) {
 	// TODO: setup client connection state
 
 	resp := FayeResponse{
 		Channel:    "/meta/connect",
 		Successful: true,
 		Error:      "",
-		ClientId:   clientId,
+		ClientID:   clientID,
 		Advice:     map[string]interface{}{"reconnect": "retry"},
 	}
 
@@ -252,14 +242,14 @@ Example response
 ]
 */
 
-func (f *Server) disconnect(clientId string) ([]byte, error) {
+func (f *Server) disconnect(clientID string) ([]byte, error) {
 	// tear down client connection state
-	f.removeClientFromServer(clientId)
+	f.removeClientFromServer(clientID)
 
 	resp := FayeResponse{
 		Channel:    "/meta/disconnect",
 		Successful: true,
-		ClientId:   clientId,
+		ClientID:   clientID,
 	}
 
 	// wrap it in an array & convert to json
@@ -281,19 +271,19 @@ Example response
 ]
 */
 
-func (f *Server) subscribe(clientId, subscription string, c chan []byte) ([]byte, error) {
+func (f *Server) subscribe(clientID, subscription string, c chan []byte) ([]byte, error) {
 
 	// subscribe the client to the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
 
-	f.addClientToSubscription(clientId, subscription, c)
+	f.addClientToSubscription(clientID, subscription, c)
 
 	// if successful send success response
 	resp := FayeResponse{
 		Channel:      "/meta/subscribe",
-		ClientId:     clientId,
+		ClientID:     clientID,
 		Subscription: subscription,
 		Successful:   true,
 		Error:        "",
@@ -320,14 +310,14 @@ Example response
 ]
 */
 
-func (f *Server) unsubscribe(clientId, subscription string) ([]byte, error) {
+func (f *Server) unsubscribe(clientID, subscription string) ([]byte, error) {
 	// TODO: unsubscribe the client from the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
 
 	// remove the client as a subscriber on the channel
-	if f.removeClientFromSubscription(clientId, subscription) {
+	if f.removeClientFromSubscription(clientID, subscription) {
 		fmt.Println("Successful unsubscribe")
 	} else {
 		fmt.Println("Failed to unsubscribe")
@@ -336,7 +326,7 @@ func (f *Server) unsubscribe(clientId, subscription string) ([]byte, error) {
 	// if successful send success response
 	resp := FayeResponse{
 		Channel:      "/meta/unsubscribe",
-		ClientId:     clientId,
+		ClientID:     clientID,
 		Subscription: subscription,
 		Successful:   true,
 		Error:        "",
@@ -366,7 +356,7 @@ func (f *Server) publish(channel, id string, data interface{}) ([]byte, error) {
 	//convert data back to json string
 	message := FayeResponse{
 		Channel: channel,
-		Id:      id,
+		ID:      id,
 		Data:    data,
 	}
 
@@ -384,7 +374,7 @@ func (f *Server) publish(channel, id string, data interface{}) ([]byte, error) {
 	resp := FayeResponse{
 		Channel:    channel,
 		Successful: true,
-		Id:         id,
+		ID:         id,
 	}
 
 	return json.Marshal([]FayeResponse{resp})
