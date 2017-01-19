@@ -23,7 +23,7 @@ import (
 func main() {
 	fmt.Println("Faye Client Runner start")
 
-	client := client.NewClient("localhost:8000/faye")
+	client := client.NewClient("localhost:8000/bayeux")
 
 	ready := make(chan bool)
 	err := client.Start(ready)
@@ -38,7 +38,7 @@ func main() {
 
 	// subscribe to a channel
 	client.Subscribe("/testing")
-	client.Subscribe("/foobar")
+	client.Subscribe("/foo")
 
 	// read from stdin
 	fmt.Print("Ready.\n> ")
@@ -92,7 +92,7 @@ func read(client *client.Client) {
 	for s.Scan() {
 		m := s.Text()
 		fmt.Print("me: " + m + "\n> ")
-		client.Publish("/testing", map[string]interface{}{"message": m})
+		client.Publish("/foo", map[string]interface{}{"message": m})
 	}
 
 	if err := s.Err(); err != nil {

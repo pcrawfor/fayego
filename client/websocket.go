@@ -24,8 +24,8 @@ const (
 	maxMessageSize = 512
 )
 
-// FayeHandler is an interface responsible for parsing faye messages
-type FayeHandler interface {
+// BayeuxHandler is an interface responsible for parsing bayeux messages
+type BayeuxHandler interface {
 	HandleMessage(message []byte) error
 	ReaderDisconnect()
 }
@@ -50,7 +50,7 @@ func (c *Connection) Connected() bool {
 }
 
 // reader - Read messages from the websocket connection
-func (c *Connection) reader(f FayeHandler) {
+func (c *Connection) reader(f BayeuxHandler) {
 	fmt.Println("reading...")
 	c.readerConnected = true
 

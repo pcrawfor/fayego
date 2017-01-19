@@ -26,14 +26,14 @@ const defaultHost = "localhost:4001/faye"
 const defaultKeepAliveSecs = 30
 
 const ( // iota is reset to 0
-	stateWSDisconnected   = iota // == 0
-	stateWSConnected      = iota
-	stateFayeDisconnected = iota
-	stateFayeConnected    = iota
+	stateWSDisconnected     = iota // == 0
+	stateWSConnected        = iota
+	stateBayeuxDisconnected = iota
+	stateBayeuxConnected    = iota
 )
 
 // Subscription is a subscription represents a subscription to a channel by the client
-// Each sub has a path representing the channel on faye, a messageChan which is recieve any messages sent to it and a connected indicator to indicate the state of the sub on the faye server
+// Each sub has a path representing the channel on bayeux, a messageChan which is recieve any messages sent to it and a connected indicator to indicate the state of the sub on the bayeux server
 type Subscription struct {
 	channel   string
 	connected bool
@@ -78,7 +78,7 @@ type Client struct {
 	Host          string
 	MessageChan   chan Message // any messages recv'd by the client will be sent to the message channel - TODO: remap this to a set of subscription message channels one per active subscription
 	conn          *Connection
-	fayeState     int
+	bayeuxState   int
 	readyChan     chan bool
 	clientID      string
 	messageNumber int
@@ -88,7 +88,7 @@ type Client struct {
 	core          shared.Core
 }
 
-// Message represents a message recv'd via the faye connection
+// Message represents a message recv'd via the bayeux connection
 type Message struct {
 	Channel string
 	Data    map[string]interface{}
@@ -101,7 +101,7 @@ func NewClient(host string) *Client {
 		host = defaultHost
 	}
 	// instantiate a Client and return
-	return &Client{Host: host, fayeState: stateWSDisconnected, MessageChan: make(chan Message, 100), messageNumber: 0, keepAliveSecs: defaultKeepAliveSecs, keepAliveChan: make(chan bool), core: shared.Core{}}
+	return &Client{Host: host, bayeuxState: stateWSDisconnected, MessageChan: make(chan Message, 100), messageNumber: 0, keepAliveSecs: defaultKeepAliveSecs, keepAliveChan: make(chan bool), core: shared.Core{}}
 }
 
 func (f *Client) SetKeepAliveIntervalSeconds(secs int) {
@@ -121,7 +121,7 @@ func (f *Client) Start(ready chan bool) error {
 	return nil
 }
 
-// connectToServer opens the websocket connection to the faye server and initialize the client state
+// connectToServer opens the websocket connection to the bayeux server and initialize the client state
 func (f *Client) connectToServer() error {
 	fmt.Println("start client")
 	fmt.Println("connectToServer")
@@ -140,7 +140,7 @@ func (f *Client) connectToServer() error {
 		return err
 	}
 
-	f.fayeState = stateWSConnected
+	f.bayeuxState = stateWSConnected
 
 	if resp != nil {
 		fmt.Println("Resp: ", resp)
@@ -180,10 +180,10 @@ func (f *Client) keepAlive() {
 	fmt.Println("exiting keepalive func")
 }
 
-// disconnectFromServer closes the websocket connection and set the faye client state
+// disconnectFromServer closes the websocket connection and set the bayeux client state
 func (f *Client) disconnectFromServer() {
 	fmt.Println("DISCONNECT FROM SERVER")
-	f.fayeState = stateWSDisconnected
+	f.bayeuxState = stateWSDisconnected
 	f.conn.exit <- true
 	f.conn.ws.Close()
 }
@@ -193,18 +193,18 @@ func (f *Client) ReaderDisconnect() {
 	f.readyChan <- false
 }
 
-// Write sends a message to the faye server over the websocket connection
+// Write sends a message to the bayeux server over the websocket connection
 func (f *Client) Write(msg string) error {
 	f.conn.send <- []byte(msg)
 	return nil
 }
 
-// HandleMessage parses and interprets a faye message response
+// HandleMessage parses and interprets a bayeux message response
 func (f *Client) HandleMessage(message []byte) error {
-	// parse the faye message and interpret the logic to set client state appropriately
-	resp := []server.FayeResponse{}
+	// parse the bayeux message and interpret the logic to set client state appropriately
+	resp := []server.BayeuxResponse{}
 	err := json.Unmarshal(message, &resp)
-	var fm server.FayeResponse
+	var fm server.BayeuxResponse
 
 	if err != nil {
 		fmt.Println("Error parsing json. ", err)
@@ -215,15 +215,15 @@ func (f *Client) HandleMessage(message []byte) error {
 		switch fm.Channel {
 		case shared.ChannelHandshake:
 			f.clientID = fm.ClientID
-			f.connect() // send faye connect message
-			f.fayeState = stateFayeConnected
+			f.connect() // send bayeux connect message
+			f.bayeuxState = stateBayeuxConnected
 			f.readyChan <- true
 
 		case shared.ChannelConnect:
 			//fmt.Println("Recv'd connect response")
 
 		case shared.ChannelDisconnect:
-			f.fayeState = stateFayeDisconnected
+			f.bayeuxState = stateBayeuxDisconnected
 			f.disconnectFromServer()
 
 		case shared.ChannelSubscribe:
@@ -282,22 +282,22 @@ func (f *Client) Unsubscribe(channel string) error {
 	return f.unsubscribe(channel)
 }
 
-// Publish publishes a message to the Faye server
+// Publish publishes a message to the Bayeux server
 func (f *Client) Publish(channel string, data map[string]interface{}) error {
 	return f.publish(channel, data)
 }
 
-// Disconnect disconnects from the Faye server
+// Disconnect disconnects from the Bayeux server
 func (f *Client) Disconnect() {
 	f.disconnect()
 }
 
 /*
-Faye protocol messages
+Bayeux protocol messages
 */
 
 /*
-type FayeResponse struct {
+type BayeuxResponse struct {
 	Channel                  string            `json:"channel,omitempty"`
 	Successful               bool              `json:"successful,omitempty"`
 	Version                  string            `json:"version,omitempty"`
@@ -311,21 +311,21 @@ type FayeResponse struct {
 }
 */
 
-// Faye message functions
+// Bayeux message functions
 
 /*
  */
 func (f *Client) handshake() {
-	message := server.FayeResponse{Channel: shared.ChannelHandshake, Version: "1.0", SupportedConnectionTypes: []string{"websocket"}}
+	message := server.BayeuxResponse{Channel: shared.ChannelHandshake, Version: "1.0", SupportedConnectionTypes: []string{"websocket"}}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating handshake message")
 	}
 }
 
-// connect to Faye and send the connect message
+// connect to Bayeux and send the connect message
 func (f *Client) connect() {
-	message := server.FayeResponse{Channel: shared.ChannelConnect, ClientID: f.clientID, ConnectionType: "websocket"}
+	message := server.BayeuxResponse{Channel: shared.ChannelConnect, ClientID: f.clientID, ConnectionType: "websocket"}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating connect message")
@@ -334,7 +334,7 @@ func (f *Client) connect() {
 
 // disconnect sends the disconnect message to the server
 func (f *Client) disconnect() {
-	message := server.FayeResponse{Channel: shared.ChannelDisconnect, ClientID: f.clientID}
+	message := server.BayeuxResponse{Channel: shared.ChannelDisconnect, ClientID: f.clientID}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating connect message")
@@ -343,7 +343,7 @@ func (f *Client) disconnect() {
 
 // subscribe the client to a channel
 func (f *Client) subscribe(channel string) error {
-	message := server.FayeResponse{Channel: shared.ChannelSubscribe, ClientID: f.clientID, Subscription: channel}
+	message := server.BayeuxResponse{Channel: shared.ChannelSubscribe, ClientID: f.clientID, Subscription: channel}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating subscribe message")
@@ -354,7 +354,7 @@ func (f *Client) subscribe(channel string) error {
 
 // unsubscribe from a channel
 func (f *Client) unsubscribe(channel string) error {
-	message := server.FayeResponse{Channel: shared.ChannelUnsubscribe, ClientID: f.clientID, Subscription: channel}
+	message := server.BayeuxResponse{Channel: shared.ChannelUnsubscribe, ClientID: f.clientID, Subscription: channel}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating unsubscribe message")
@@ -365,7 +365,7 @@ func (f *Client) unsubscribe(channel string) error {
 
 // publish sends a message to a channel
 func (f *Client) publish(channel string, data map[string]interface{}) error {
-	message := server.FayeResponse{Channel: channel, ClientID: f.clientID, ID: f.core.NextMessageID(), Data: data}
+	message := server.BayeuxResponse{Channel: channel, ClientID: f.clientID, ID: f.core.NextMessageID(), Data: data}
 	err := f.writeMessage(message)
 	if err != nil {
 		fmt.Println("Error generating unsubscribe message")
@@ -375,7 +375,7 @@ func (f *Client) publish(channel string, data map[string]interface{}) error {
 }
 
 // writeMessage encodes the json and send the message over the wire.
-func (f *Client) writeMessage(message server.FayeResponse) error {
+func (f *Client) writeMessage(message server.BayeuxResponse) error {
 	if !f.conn.Connected() {
 		// reconnect
 		fmt.Println("RECONNECT")
