@@ -1,28 +1,17 @@
-/*
-TODO: factor out the code and clean things up a little, commit - works with firefox/chrome/safari on mac with long-polling/eventsource support
-TODO: pure long-polling
-TODO: callback-polling
-TODO: cross-origin-polling
-*/
-/*
-Created by Paul Crawford
-Copyright (c) 2013. All rights reserved.
-*/
-package fayeserver
+package server
 
 import (
 	"fmt"
-	eventsource "github.com/antage/eventsource/http"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	eventsource "github.com/antage/eventsource/http"
+	"github.com/gorilla/websocket"
 )
 
-// =====
-// WebSocket handling
-
+// Connection represents a websocket connection along with reader and writer state
 type Connection struct {
 	ws          *websocket.Conn
 	es          eventsource.EventSource
@@ -30,25 +19,7 @@ type Connection struct {
 	isWebsocket bool
 }
 
-/*
-Initial constants based on websocket example code from github.com/garyburd/go-websocket
-Reader & Writer functions also implemented based on
-*/
-const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
-	maxMessageSize = 1024
-)
-
-func (c *Connection) esWriter(f *FayeServer) {
+func (c *Connection) esWriter(f *Server) {
 	fmt.Println("Writer started.")
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -74,79 +45,10 @@ func (c *Connection) esWriter(f *FayeServer) {
 	}
 }
 
-/*
-reader - reads messages from the websocket connection and passes them through to the fayeserver message handler
-*/
-func (c *Connection) reader(f *FayeServer) {
-	fmt.Println("reading...")
-	defer func() {
-		fmt.Println("reader disconnect")
-		f.DisconnectChannel(c.send)
-		c.ws.Close()
-	}()
-	c.ws.SetReadLimit(maxMessageSize)
-	c.ws.SetReadDeadline(time.Now().Add(pongWait))
-	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-	for {
-		_, message, err := c.ws.ReadMessage()
-		if err != nil {
-			break
-		}
-
-		// ask faye client to handle faye message
-		response, ferr := f.HandleMessage(message, c.send)
-		if ferr != nil {
-			fmt.Println("Faye Error: ", ferr)
-			c.send <- []byte(fmt.Sprint("Error: ", ferr))
-		} else {
-			c.send <- response
-		}
-	}
-
-	fmt.Println("reader exited.")
-}
-
 func (c *Connection) esWrite(payload []byte) error {
 	fmt.Println("Writing to eventsource: ", string(payload))
 	c.es.SendMessage(string(payload), "", "")
 	return nil
-}
-
-/*
-write - writes messages to the websocket connection
-*/
-func (c *Connection) wsWrite(mt int, payload []byte) error {
-	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
-	return c.ws.WriteMessage(mt, payload)
-}
-
-/*
-writer - is the write loop that reads messages off the send channel and writes them out over the websocket connection
-*/
-func (c *Connection) writer(f *FayeServer) {
-	fmt.Println("Writer started.")
-	ticker := time.NewTicker(pingPeriod)
-	defer func() {
-		ticker.Stop()
-		c.ws.Close()
-	}()
-
-	for {
-		select {
-		case message, ok := <-c.send:
-			if !ok {
-				c.wsWrite(websocket.CloseMessage, []byte{})
-				return
-			}
-			if err := c.wsWrite(websocket.TextMessage, []byte(message)); err != nil {
-				return
-			}
-		case <-ticker.C:
-			if err := c.wsWrite(websocket.PingMessage, []byte{}); err != nil {
-				return
-			}
-		}
-	}
 }
 
 /*
@@ -212,9 +114,8 @@ func serveOther(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("REQUEST HEADER ", r.Header)
 
 	if isEventSource(r) {
+		fmt.Println("Looks like event source")
 		handleEventSource(w, r)
-	} else {
-		serveLongPolling(f, w, r)
 	}
 	w.WriteHeader(http.StatusOK)
 	return
@@ -223,13 +124,13 @@ func serveOther(w http.ResponseWriter, r *http.Request) {
 func handleEventSource(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Handle event source: ", r.URL.Path)
 	// create a new connection for the event source action
-	clientId := strings.Split(r.URL.Path, "/")[2]
-	fmt.Println("clientID: ", clientId)
+	clientID := strings.Split(r.URL.Path, "/")[2]
+	fmt.Println("clientID: ", clientID)
 	es := eventsource.New(nil, nil)
 	c := &Connection{send: make(chan []byte, 256), es: es, isWebsocket: false}
 	// TODO: NEED TO ASSOCIATED THE EXISTING FAYE CLIENT INFO/SUBSCRIPTIONS WITH THE CONNECTION CHANNEL
 	// USE CLIENT ID TO UPDATE FAYE INFO WITH ES CONNETION CHANNEL
-	f.UpdateClientChannel(clientId, c.send)
+	f.UpdateClientChannel(clientID, c.send)
 	go c.esWriter(f)
 	c.es.ServeHTTP(w, r)
 	return
@@ -255,28 +156,26 @@ handleEventSource: function(request, response) {
 serverWs - provides an http handler for upgrading a connection to a websocket connection
 */
 func serveWs(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("serveWs")
 	fmt.Println("METHOD: ", r.Method)
 	fmt.Println("REQUEST URL: ", r.URL.Path)
 	fmt.Println("REQUEST RAW QUERY: ", r.URL.RawQuery)
 	fmt.Println("REQUEST HEADER ", r.Header)
 
-	// server static assets
-	// TODO - detect if it's a req that matches a static asset and if so serve it
-
 	// handle options
-	if r.Method == "OPTIONS" || r.Header.Get("Access-Control-Request-Method") == "POST" {
-		handleOptions(w, r)
-	}
+	// if r.Method == "OPTIONS" || r.Header.Get("Access-Control-Request-Method") == "POST" {
+	// 	handleOptions(w, r)
+	// }
 
-	if isEventSource(r) {
-		fmt.Println("Is event source")
-	}
+	// if isEventSource(r) {
+	// 	fmt.Println("Is event source")
+	// }
 
-	if r.Method != "GET" {
-		//http.Error(w, "Method not allowed", 405)
-		serveLongPolling(f, w, r)
-		return
-	}
+	// if r.Method != "GET" {
+	// 	http.Error(w, "Method not allowed", 405)
+	// 	//serveLongPolling(f, w, r)
+	// 	return
+	// }
 
 	/*
 	   if r.Header.Get("Origin") != "http://"+r.Host {
@@ -288,8 +187,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := websocket.Upgrade(w, r, nil, 1024, 1024)
 	if _, ok := err.(websocket.HandshakeError); ok {
 		//http.Error(w, "Not a websocket handshake", 400)
+		fmt.Println("ERR:", err)
 		fmt.Println("NOT A WEBSOCKET HANDSHAKE")
-		serveLongPolling(f, w, r)
+		serveJSONP(f, w, r)
 		return
 	} else if err != nil {
 		fmt.Println(err)
@@ -333,18 +233,16 @@ func isEventSource(r *http.Request) bool {
 	return accept == "text/event-stream"
 }
 
-var f *FayeServer
+var f *Server
 
-/*
-Start the Faye server on the address/port given in the addr param
-*/
+// Start inits the http server on the address/port given in the addr param
 func Start(addr string) {
-	f = NewFayeServer()
-	http.HandleFunc("/faye", serveWs)
+	f = NewServer()
+	http.HandleFunc("/bayeux", serveWs)
 	http.HandleFunc("/", serveOther)
 
 	// serve static assets workaround
-	http.Handle("/file/", http.StripPrefix("/file", http.FileServer(http.Dir("/Users/paul/go/src/github.com/pcrawfor/fayego/runner"))))
+	//http.Handle("/file/", http.StripPrefix("/file", http.FileServer(http.Dir("/Users/paul/go/src/github.com/pcrawfor/fayego/runner"))))
 
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
