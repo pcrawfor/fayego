@@ -1,9 +1,10 @@
-package fayeclient
+package client
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 /*
@@ -23,12 +24,13 @@ const (
 	maxMessageSize = 512
 )
 
-// interface responsible for parsing faye messages
-type FayeHandler interface {
+// BayeuxHandler is an interface responsible for parsing bayeux messages
+type BayeuxHandler interface {
 	HandleMessage(message []byte) error
 	ReaderDisconnect()
 }
 
+// Connection holds a websocket connnection and manages connection state
 type Connection struct {
 	ws              *websocket.Conn
 	readerConnected bool
@@ -37,20 +39,18 @@ type Connection struct {
 	exit            chan bool
 }
 
+// NewConnection instantiates and returns a new Connection object
 func NewConnection(ws *websocket.Conn) *Connection {
 	return &Connection{send: make(chan []byte, 256), ws: ws, exit: make(chan bool)}
 }
 
+// Connected returns a bool indicating the connection state of both the reader and writer on the connection
 func (c *Connection) Connected() bool {
 	return c.readerConnected && c.writerConnected
 }
 
-/*
-reader
-
-Read messages from the websocket connection
-*/
-func (c *Connection) reader(f FayeHandler) {
+// reader - Read messages from the websocket connection
+func (c *Connection) reader(f BayeuxHandler) {
 	fmt.Println("reading...")
 	c.readerConnected = true
 
@@ -77,16 +77,13 @@ func (c *Connection) reader(f FayeHandler) {
 	fmt.Println("reader exited.")
 }
 
-/*
-  Writer
-
-  Write messages to the websocket connection
-*/
+// write messages to the websocket connection
 func (c *Connection) write(mt int, payload []byte) error {
 	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 	return c.ws.WriteMessage(mt, payload)
 }
 
+// writer starts a write loop that writes out messages to the websocket connection
 func (c *Connection) writer() {
 	fmt.Println("Writer started.")
 	c.writerConnected = true

@@ -1,47 +1,36 @@
-/*
-	Faye Server
-
-*/
-package fayeserver
+// Package server implements the bayeux specific message handling and server logic for a bayeux backend server
+package server
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/pcrawfor/fayego/shared"
 )
 
-const CHANNEL_HANDSHAKE = "/meta/handshake"
-const CHANNEL_CONNECT = "/meta/connect"
-const CHANNEL_DISCONNECT = "/meta/disconnect"
-const CHANNEL_SUBSCRIBE = "/meta/subscribe"
-const CHANNEL_UNSUBSCRIBE = "/meta/unsubscribe"
-
-type FayeServer struct {
+// Server is the main Bayeux server object which manages connections, subscriptions and clients
+type Server struct {
 	Connections   []Connection
 	Subscriptions map[string][]Client
 	SubMutex      sync.RWMutex
 	Clients       map[string]Client
 	ClientMutex   sync.RWMutex
-	idCount       int
+	core          shared.Core
 }
 
-/*
-Instantiate a new faye server
-*/
-func NewFayeServer() *FayeServer {
-	return &FayeServer{Connections: []Connection{},
+// NewServer returns and instance of Server
+func NewServer() *Server {
+	return &Server{Connections: []Connection{},
 		Subscriptions: make(map[string][]Client),
-		Clients:       make(map[string]Client)}
+		Clients:       make(map[string]Client),
+		core:          shared.Core{}}
 }
 
-// general message handling
-/*
-
-*/
-func (f *FayeServer) publishToChannel(channel, data string) {
+// publishToChannel publishes the message data string to the given channel
+func (f *Server) publishToChannel(channel, data string) {
 	subs, ok := f.Subscriptions[channel]
 	fmt.Println("Subs: ", f.Subscriptions, "count: ", len(f.Subscriptions[channel]))
 	if ok {
@@ -49,10 +38,8 @@ func (f *FayeServer) publishToChannel(channel, data string) {
 	}
 }
 
-/*
-
-*/
-func (f *FayeServer) multiplexWrite(subs []Client, data string) {
+// multiplexWrite sends data to the subscriptions provided
+func (f *Server) multiplexWrite(subs []Client, data string) {
 	var group sync.WaitGroup
 	for i := range subs {
 		fmt.Println("subs[i]: ", subs[i])
@@ -70,96 +57,99 @@ func (f *FayeServer) multiplexWrite(subs []Client, data string) {
 	group.Wait()
 }
 
-func (f *FayeServer) findClientForChannel(c chan []byte) *Client {
+// findClientForChannel looks up the client associated with a given write channel
+func (f *Server) findClientForChannel(c chan []byte) *Client {
 	f.ClientMutex.Lock()
 	defer f.ClientMutex.Unlock()
 
 	for _, client := range f.Clients {
 		if client.WriteChannel == c {
-			fmt.Println("Matched Client: ", client.ClientId)
+			fmt.Println("Matched Client: ", client.ClientID)
 			return &client
 		}
 	}
 	return nil
 }
 
-func (f *FayeServer) DisconnectChannel(c chan []byte) {
+// DisconnectChannel disconnects from the given channel sending the bayeux disconnect message
+func (f *Server) DisconnectChannel(c chan []byte) {
 	client := f.findClientForChannel(c)
 	if client != nil {
-		fmt.Println("Disconnect Client: ", client.ClientId)
-		f.removeClientFromServer(client.ClientId)
+		fmt.Println("Disconnect Client: ", client.ClientID)
+		f.removeClientFromServer(client.ClientID)
 	}
 }
 
-// ========
-
-type FayeMessage struct {
+// BayeuxMessage represents an incoming Bayeux message along with the associated fields
+type BayeuxMessage struct {
 	Channel                  string      `json:"channel"`
-	ClientId                 string      `json:"clientId,omitempty"`
+	ClientID                 string      `json:"clientId,omitempty"`
 	Subscription             string      `json:"subscription,omitempty"`
 	Data                     interface{} `json:"data,omitempty"`
-	Id                       string      `json:"id,omitempty"`
+	ID                       string      `json:"id,omitempty"`
 	SupportedConnectionTypes []string    `json:"supportedConnectionTypes,omitempty"`
 }
 
-// Message handling
+// HandleMessage is the core Bayeux message handler for the server, it interprets each bayeux message and triggers the appropriate response
+func (f *Server) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
+	fmt.Println("Raw message:", string(message))
 
-func (f *FayeServer) HandleMessage(message []byte, c chan []byte) ([]byte, error) {
 	// parse message JSON
-	fm := FayeMessage{}
+	fm := BayeuxMessage{}
 	err := json.Unmarshal(message, &fm)
 
 	if err != nil {
 		fmt.Println("Error parsing message json, try array parse:", err)
 
-		ar := []FayeMessage{}
+		ar := []BayeuxMessage{}
 		jerr := json.Unmarshal(message, &ar)
 		if jerr != nil {
 			fmt.Println("Error parsing message json as array:", err)
 		} else {
-			fm = ar[0]
-			fmt.Println("Parsed as: ", fm)
+			if len(ar) > 0 {
+				fm = ar[0]
+				fmt.Println("Parsed as: ", fm)
+			} else {
+				return []byte("[]"), nil
+			}
 		}
 	}
 
 	switch fm.Channel {
-	case CHANNEL_HANDSHAKE:
+	case shared.ChannelHandshake:
 		fmt.Println("handshake")
 		return f.handshake()
-	case CHANNEL_CONNECT:
+	case shared.ChannelConnect:
 		fmt.Println("connect")
-		return f.connect(fm.ClientId)
-	case CHANNEL_DISCONNECT:
+		return f.connect(fm.ClientID)
+	case shared.ChannelDisconnect:
 		fmt.Println("disconnect")
-		return f.disconnect(fm.ClientId)
-	case CHANNEL_SUBSCRIBE:
+		return f.disconnect(fm.ClientID)
+	case shared.ChannelSubscribe:
 		fmt.Println("subscribe")
-		return f.subscribe(fm.ClientId, fm.Subscription, c)
-	case CHANNEL_UNSUBSCRIBE:
+		return f.subscribe(fm.ClientID, fm.Subscription, c)
+	case shared.ChannelUnsubscribe:
 		fmt.Println("subscribe")
-		return f.unsubscribe(fm.ClientId, fm.Subscription)
+		return f.unsubscribe(fm.ClientID, fm.Subscription)
 	default:
 		fmt.Println("publish")
 		fmt.Println("data is: ", fm.Data)
-		return f.publish(fm.Channel, fm.Id, fm.Data)
+		return f.publish(fm.Channel, fm.ID, fm.Data)
 	}
 }
 
-/*
-FayeResponse
-*/
-
-type FayeResponse struct {
+// BayeuxResponse represents a Bayeux response message and all associated fields
+type BayeuxResponse struct {
 	Channel                  string                 `json:"channel,omitempty"`
 	Successful               bool                   `json:"successful,omitempty"`
 	Version                  string                 `json:"version,omitempty"`
 	SupportedConnectionTypes []string               `json:"supportedConnectionTypes,omitempty"`
 	ConnectionType           string                 `json:"connectionType,omitempty"`
-	ClientId                 string                 `json:"clientId,omitempty"`
+	ClientID                 string                 `json:"clientId,omitempty"`
 	Advice                   map[string]interface{} `json:"advice,omitempty"`
 	Subscription             string                 `json:"subscription,omitempty"`
 	Error                    string                 `json:"error,omitempty"`
-	Id                       string                 `json:"id,omitempty"`
+	ID                       string                 `json:"id,omitempty"`
 	Data                     interface{}            `json:"data,omitempty"`
 	Ext                      interface{}            `json:"ext,omitempty"`
 }
@@ -193,22 +183,22 @@ Bayeux Handshake response
 
 */
 
-func (f *FayeServer) handshake() ([]byte, error) {
+func (f *Server) handshake() ([]byte, error) {
 	fmt.Println("handshake!")
 
 	// build response
-	resp := FayeResponse{
-		Id:                       "1",
+	resp := BayeuxResponse{
+		ID:                       "1",
 		Channel:                  "/meta/handshake",
 		Successful:               true,
 		Version:                  "1.0",
-		SupportedConnectionTypes: []string{"websocket", "callback-polling", "long-polling", "cross-origin-long-polling", "eventsource", "in-process"},
-		ClientId:                 generateClientId(),
+		SupportedConnectionTypes: []string{"websocket", "eventsource"},
+		ClientID:                 f.core.GenerateClientID(),
 		Advice:                   map[string]interface{}{"reconnect": "retry", "interval": 0, "timeout": 45000},
 	}
 
 	// wrap it in an array & convert to json
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
 /*
@@ -228,19 +218,19 @@ Example response
 ]
 */
 
-func (f *FayeServer) connect(clientId string) ([]byte, error) {
+func (f *Server) connect(clientID string) ([]byte, error) {
 	// TODO: setup client connection state
 
-	resp := FayeResponse{
+	resp := BayeuxResponse{
 		Channel:    "/meta/connect",
 		Successful: true,
 		Error:      "",
-		ClientId:   clientId,
+		ClientID:   clientID,
 		Advice:     map[string]interface{}{"reconnect": "retry"},
 	}
 
 	// wrap it in an array & convert to json
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
 /*
@@ -256,18 +246,18 @@ Example response
 ]
 */
 
-func (f *FayeServer) disconnect(clientId string) ([]byte, error) {
+func (f *Server) disconnect(clientID string) ([]byte, error) {
 	// tear down client connection state
-	f.removeClientFromServer(clientId)
+	f.removeClientFromServer(clientID)
 
-	resp := FayeResponse{
+	resp := BayeuxResponse{
 		Channel:    "/meta/disconnect",
 		Successful: true,
-		ClientId:   clientId,
+		ClientID:   clientID,
 	}
 
 	// wrap it in an array & convert to json
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
 /*
@@ -285,19 +275,19 @@ Example response
 ]
 */
 
-func (f *FayeServer) subscribe(clientId, subscription string, c chan []byte) ([]byte, error) {
+func (f *Server) subscribe(clientID, subscription string, c chan []byte) ([]byte, error) {
 
 	// subscribe the client to the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
 
-	f.addClientToSubscription(clientId, subscription, c)
+	f.addClientToSubscription(clientID, subscription, c)
 
 	// if successful send success response
-	resp := FayeResponse{
+	resp := BayeuxResponse{
 		Channel:      "/meta/subscribe",
-		ClientId:     clientId,
+		ClientID:     clientID,
 		Subscription: subscription,
 		Successful:   true,
 		Error:        "",
@@ -306,7 +296,7 @@ func (f *FayeServer) subscribe(clientId, subscription string, c chan []byte) ([]
 	// TODO: handle failure case
 
 	// wrap it in an array and convert to json
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
 /*
@@ -324,23 +314,23 @@ Example response
 ]
 */
 
-func (f *FayeServer) unsubscribe(clientId, subscription string) ([]byte, error) {
+func (f *Server) unsubscribe(clientID, subscription string) ([]byte, error) {
 	// TODO: unsubscribe the client from the given channel
 	if len(subscription) == 0 {
 		return []byte{}, errors.New("Subscription channel not present")
 	}
 
 	// remove the client as a subscriber on the channel
-	if f.removeClientFromSubscription(clientId, subscription) {
+	if f.removeClientFromSubscription(clientID, subscription) {
 		fmt.Println("Successful unsubscribe")
 	} else {
 		fmt.Println("Failed to unsubscribe")
 	}
 
 	// if successful send success response
-	resp := FayeResponse{
+	resp := BayeuxResponse{
 		Channel:      "/meta/unsubscribe",
-		ClientId:     clientId,
+		ClientID:     clientID,
 		Subscription: subscription,
 		Successful:   true,
 		Error:        "",
@@ -349,7 +339,7 @@ func (f *FayeServer) unsubscribe(clientId, subscription string) ([]byte, error) 
 	// TODO: handle failure case
 
 	// wrap it in an array and convert to json
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
 /*
@@ -365,16 +355,16 @@ Example response
 ]
 
 */
-func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, error) {
+func (f *Server) publish(channel, id string, data interface{}) ([]byte, error) {
 
 	//convert data back to json string
-	message := FayeResponse{
+	message := BayeuxResponse{
 		Channel: channel,
-		Id:      id,
+		ID:      id,
 		Data:    data,
 	}
 
-	dataStr, err := json.Marshal([]FayeResponse{message})
+	dataStr, err := json.Marshal([]BayeuxResponse{message})
 	if err != nil {
 		fmt.Println("Error parsing message!")
 		return []byte{}, errors.New("Invalid Message Data")
@@ -383,26 +373,22 @@ func (f *FayeServer) publish(channel, id string, data interface{}) ([]byte, erro
 	fmt.Println("data: ", string(dataStr))
 
 	f.publishToChannel(channel, string(dataStr))
+	f.publishToWildcard(channel, string(dataStr))
 
-	resp := FayeResponse{
+	resp := BayeuxResponse{
 		Channel:    channel,
 		Successful: true,
-		Id:         id,
+		ID:         id,
 	}
 
-	return json.Marshal([]FayeResponse{resp})
+	return json.Marshal([]BayeuxResponse{resp})
 }
 
-// Helper functions:
-
-/*
-	Generate a clientId for use in the communication with the client
-*/
-func generateClientId() string {
-	return uuid.New()
-}
-
-func (f *FayeServer) nextMessageId() string {
-	f.idCount++
-	return string(f.idCount)
+func (f *Server) publishToWildcard(channel, dataStr string) {
+	parts := strings.Split(channel, "/")
+	parts = parts[:len(parts)-1]
+	parts = append(parts, "*")
+	wildcardChannel := strings.Join(parts, "/")
+	fmt.Println("WILDCARD: ", wildcardChannel)
+	f.publishToChannel(wildcardChannel, dataStr)
 }
