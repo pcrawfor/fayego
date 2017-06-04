@@ -53,9 +53,9 @@
     // Faye.Transport.WebSocket.isUsable = function($, _, c) { c(true) };
     // Faye.XHRTransport.WebSocket.isUsable = function($, _, c) { c(false) };
     // Faye.JSONPTransport.WebSocket.isUsable = function($, _, c) { c(false) };
-    Faye.Logging.logLevel = 0;
-    var client = new Faye.Client('http://localhost:3002/faye');
-    client.disable('websocket');
+    Faye.Logging.logLevel = 1;
+    var client = new Faye.Client("http://localhost:8000/faye");
+    //client.disable('websocket');
     // client.Transport.WebSocket.isUsable = function($, _, c) { c(true) };
     // client.XHRTransport.WebSocket.isUsable = function($, _, c) { c(false) };
     // client.JSONPTransport.WebSocket.isUsable = function($, _, c) { c(false) };
